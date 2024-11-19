@@ -1,0 +1,26 @@
+# pyproject.toml
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlasopenmagic"
+version = "0.1.0"
+description = "A utility package for retrieving ATLAS open data URLs and metadata."
+authors = [
+    { name="Your Name", email="your.email@example.com" }
+]
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.6"
+keywords = ["ATLAS", "Open Data", "Utilities"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/atlasopenutils"
+"Repository" = "https://github.com/yourusername/atlasopenutils"
