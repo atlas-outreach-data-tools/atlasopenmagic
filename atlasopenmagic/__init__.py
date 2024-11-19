@@ -5,6 +5,7 @@ from .metadata import (
     get_cross_section,
     get_k_factor,
     get_description,
+    set_release,
 )
 from .id_matches import id_matches
 
@@ -16,4 +17,5 @@ __all__ = [
     "get_cross_section",
     "get_k_factor",
     "get_description",
+    "set_release",
 ]
