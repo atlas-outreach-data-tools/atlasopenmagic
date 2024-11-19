@@ -121,23 +121,3 @@ def get_description(key, metadata_file=None):
     - The description string, or None if not found.
     """
     return get_metadata_field(key, 'description', metadata_file)
-
-
-# # Retrieve cross-section
-# cross_section = get_cross_section('301243')
-# print(f"Cross-section: {cross_section} pb")
-
-# # Retrieve k-factor
-# k_factor = get_k_factor('Pythia8EvtGen_A14NNPDF23LO_Wprime_enu_SSM3000')
-# print(f"k-factor: {k_factor}")
-
-# # Retrieve description
-# description = get_description('301243')
-# print(f"Description: {description}")
-
-# # Retrieve all metadata
-# metadata = get_metadata('301243')
-# print(metadata)
-
-# sum_of_weights = get_metadata_field('301243', 'sumOfWeights')
-# print(f"Sum of Weights: {sum_of_weights}")
