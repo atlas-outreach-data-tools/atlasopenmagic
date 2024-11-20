@@ -1,4 +1,4 @@
-# **Atlas Open Magic**
+# **Atlas Open Magic** 🪄📊
 
 **Atlas Open Magic** is a Python package designed to simplify working with ATLAS Open Data by providing utilities to manage metadata and URL mappings efficiently.
 
