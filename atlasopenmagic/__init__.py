@@ -6,7 +6,6 @@ from .metadata import (
     get_k_factor,
     get_description,
 )
-from .id_matches import id_matches
 
 # List of public functions available when importing the package
 __all__ = [
