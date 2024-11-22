@@ -63,6 +63,9 @@ def get_urls(key):
         _load_url_code_mapping()
 
     value = id_matches.get(str(key))
+    if value is None:
+        value = id_matches_8TeV.get(str(key))
+        
     if not value:
         return []
 
