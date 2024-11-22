@@ -51,17 +51,22 @@ def build_mappings():
 
     Returns:
     - A dictionary combining all mappings from different configurations.
+
+    Raises:
+    - ValueError: If FILE_PATHS and REGEX_PATTERNS are not of the same size.
     """
+    if len(FILE_PATHS) != len(REGEX_PATTERNS):
+        raise ValueError("FILE_PATHS and REGEX_PATTERNS must be the same size.")
+
     combined_mapping = {}
 
-    # Load mappings for standard
-    combined_mapping.update(load_url_code_mapping(FILE_PATHS["standard"], REGEX_PATTERNS["standard"]))
-
-    # Load mappings for TeV8 using the composite regex
-    combined_mapping.update(load_url_code_mapping(FILE_PATHS["tev8"], REGEX_PATTERNS["tev8"]))
+    for key, file_path in FILE_PATHS.items():
+        if key in REGEX_PATTERNS:
+            combined_mapping.update(load_url_code_mapping(file_path, REGEX_PATTERNS[key]))
+        else:
+            raise KeyError(f"Key '{key}' in FILE_PATHS is not present in REGEX_PATTERNS.")
 
     return combined_mapping
-
 
 def initialize_mappings():
     """
