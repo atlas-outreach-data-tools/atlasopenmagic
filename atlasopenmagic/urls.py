@@ -7,75 +7,89 @@ from atlasopenmagic.data.id_matches import id_matches
 _url_code_mapping = None
 _mapping_lock = threading.Lock()
 
-# Paths to the URL files
-_URL_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'urls.txt')
-_URL_FILE_PATH_TeV8 = os.path.join(os.path.dirname(__file__), 'data', 'urls_TeV8.txt')
+# File paths configuration
+FILE_PATHS = {
+    "standard": os.path.join(os.path.dirname(__file__), 'data', 'urls.txt'),
+    "tev8": os.path.join(os.path.dirname(__file__), 'data', 'urls_TeV8.txt'),
+}
 
+# Regex patterns configuration
+REGEX_PATTERNS = {
+    "standard": r'DAOD_PHYSLITE\.(\d+)\.',
+    "tev8": r'(?:mc_(\d+)|Data(\d+))',
+}
 
-def _load_url_code_mapping(file_path, pattern):
+def load_url_code_mapping(file_path, regex_pattern):
     """
-    Load URLs from the specified file and build a mapping from code to URLs.
+    Load URLs from a file and build a mapping from extracted codes to URLs.
 
     Parameters:
-    - file_path: The path to the file containing the URLs.
-    - pattern: A regex pattern to extract codes from URLs.
+    - file_path: Path to the file containing URLs.
+    - regex_pattern: Regex pattern to extract codes from URLs.
 
     Returns:
-    - A dictionary mapping codes to lists of URLs.
+    - A dictionary mapping extracted codes to lists of URLs.
     """
-    mapping = {}
-    regex = re.compile(pattern)
+    with _mapping_lock:
+        mapping = {}
+        regex = re.compile(regex_pattern)
 
-    # Open the file and process its lines
-    with open(file_path, 'r') as f:
-        for line in f:
-            url = line.strip()
-            match = regex.search(url)
-            if match:
-                code = match.group(1)
-                mapping.setdefault(code, []).append(url)
-    
-    return mapping
+        with open(file_path, 'r') as f:
+            for line in f:
+                url = line.strip()
+                match = regex.search(url)
+                if match:
+                    # Check which group matched
+                    code = match.group(1) or match.group(2)
+                    mapping.setdefault(code, []).append(url)
 
+        return mapping
 
-def _initialize_mappings():
+def build_mappings():
     """
-    Initialize URL mappings for both standard and TeV8 cases.
-    This function is thread-safe.
+    Build mappings for all configured file paths and regex patterns.
+
+    Returns:
+    - A dictionary combining all mappings from different configurations.
+    """
+    combined_mapping = {}
+
+    # Load mappings for standard
+    combined_mapping.update(load_url_code_mapping(FILE_PATHS["standard"], REGEX_PATTERNS["standard"]))
+
+    # Load mappings for TeV8 using the composite regex
+    combined_mapping.update(load_url_code_mapping(FILE_PATHS["tev8"], REGEX_PATTERNS["tev8"]))
+
+    return combined_mapping
+
+
+def initialize_mappings():
+    """
+    Initialize URL mappings in a thread-safe manner.
     """
     global _url_code_mapping
     if _url_code_mapping is not None:
         return
 
     with _mapping_lock:
-        if _url_code_mapping is not None:  # Double-checked locking
-            return
-
-        # Load mappings with different patterns for standard and TeV8 files
-        standard_mapping = _load_url_code_mapping(_URL_FILE_PATH, r'DAOD_PHYSLITE\.(\d+)\.')
-        tev8_mapping = _load_url_code_mapping(_URL_FILE_PATH_TeV8, r'mc_(\d+)\.')
-
-        # Combine the mappings (TeV8 URLs override standard ones if keys overlap)
-        _url_code_mapping = {**standard_mapping, **tev8_mapping}
-
+        if _url_code_mapping is None:  # Double-checked locking
+            _url_code_mapping = build_mappings()
 
 def get_urls(key):
     """
-    Find URLs corresponding to a given key.
+    Retrieve URLs corresponding to a given key.
 
     Parameters:
-    - key: The key to search for (as a string or integer).
+    - key: The key to search for (string or integer).
 
     Returns:
-    - A list of URLs matching the key.
+    - A list of URLs associated with the key.
     """
-    # Load the URL-code mappings if not already loaded
     if _url_code_mapping is None:
-        _initialize_mappings()
+        initialize_mappings()
 
     value = id_matches.get(str(key))
     if not value:
         return []
 
-    # Retrieve URLs for the key
     return _url_code_mapping.get(value, [])
