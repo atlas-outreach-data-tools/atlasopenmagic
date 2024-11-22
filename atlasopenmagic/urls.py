@@ -1,13 +1,16 @@
 import os
 import re
 import threading
-from .id_matches import id_matches
+from atlasopenmagic.data.id_matches import id_matches
 
 # Global variables for caching URLs
 _url_code_mapping = None
 _mapping_lock = threading.Lock()
 
-def _load_url_code_mapping(url_file='urls.txt'):
+# Path to the URL file (relative to this module)
+_URL_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'urls.txt')
+
+def _load_url_code_mapping():
     """
     Load URLs from the file and build a mapping from code to URLs.
     This function is intended to be called internally.
@@ -23,12 +26,8 @@ def _load_url_code_mapping(url_file='urls.txt'):
         _url_code_mapping = {}
         pattern = re.compile(r'DAOD_PHYSLITE\.(\d+)\.')
 
-        # Construct the full path to the URL file
-        base_dir = os.path.dirname(__file__)
-        url_file_path = os.path.join(base_dir, url_file)
-
-        # Open the file using the full path
-        with open(url_file_path, 'r') as f:
+        # Open the file using the predefined path
+        with open(_URL_FILE_PATH, 'r') as f:
             for line in f:
                 url = line.strip()
                 match = pattern.search(url)
@@ -36,20 +35,19 @@ def _load_url_code_mapping(url_file='urls.txt'):
                     code = match.group(1)
                     _url_code_mapping.setdefault(code, []).append(url)
 
-def get_urls(key, url_file='urls.txt'):
+def get_urls(key):
     """
     Find URLs corresponding to a given key.
 
     Parameters:
     - key: The key to search for (as a string or integer).
-    - url_file: The path to the file containing URLs.
 
     Returns:
     - A list of URLs matching the key.
     """
     # Load the URL-code mapping if not already loaded
     if _url_code_mapping is None:
-        _load_url_code_mapping(url_file)
+        _load_url_code_mapping()
 
     value = id_matches.get(str(key))
     if not value:
