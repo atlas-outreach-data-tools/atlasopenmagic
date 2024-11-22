@@ -88,23 +88,6 @@ def _load_metadata():
             # Store metadata indexed by dataset_number and physics_short
             _metadata[dataset_number] = row
             _metadata[physics_short] = row
-<<<<<<< HEAD
-
-def get_metadata(key, metadata_file=None):
-    """
-    Retrieve the entire metadata row for a given key.
-
-    Parameters:
-    - key: The dataset number or physics short name.
-    - metadata_file: Optional path to a local metadata CSV file.
-
-    Returns:
-    - A dictionary containing all metadata fields, or None if not found.
-    """
-    if _metadata is None:
-        _load_metadata(metadata_file)
-
-    return _metadata.get(str(key).strip())
 
 def get_metadata_field(key, field_name, metadata_file=None):
     """
@@ -124,38 +107,6 @@ def get_metadata_field(key, field_name, metadata_file=None):
     data = _metadata.get(str(key).strip())
     if data:
         return data.get(field_name)
-    else:
-        return None
-
-def get_cross_section(key, metadata_file=None):
-    """
-    Retrieve the cross-section for a given dataset.
-
-    Parameters:
-    - key: The dataset number or physics short name.
-
-    Returns:
-    - The cross-section in pb, or None if not found.
-    """
-    cross_section = get_metadata_field(key, 'crossSection_pb', metadata_file)
-    if cross_section is not None:
-        return float(cross_section)
-    else:
-        return None
-
-def get_k_factor(key, metadata_file=None):
-    """
-    Retrieve the k-factor for a given dataset.
-
-    Parameters:
-    - key: The dataset number or physics short name.
-
-    Returns:
-    - The k-factor, or None if not found.
-    """
-    k_factor = get_metadata_field(key, 'kFactor', metadata_file)
-    if k_factor is not None:
-        return float(k_factor)
     else:
         return None
 
@@ -179,5 +130,3 @@ def set_release(release):
     with _metadata_lock:
         _metadata = None  # Clear cached metadata
         _METADATA_URL = f'https://opendata.atlas.cern/files/{release}_metadata.csv'
-=======
->>>>>>> upstream/main
