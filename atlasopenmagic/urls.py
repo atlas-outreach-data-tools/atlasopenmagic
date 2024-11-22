@@ -1,7 +1,7 @@
 import os
 import re
 import threading
-from atlasopenmagic.data.id_matches import id_matches
+from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV
 
 # Global variables for caching URLs
 _url_code_mapping = None
@@ -65,7 +65,7 @@ def get_urls(key):
     value = id_matches.get(str(key))
     if value is None:
         value = id_matches_8TeV.get(str(key))
-        
+
     if not value:
         return []
 
