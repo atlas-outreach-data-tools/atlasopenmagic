@@ -1,55 +1,71 @@
 import os
 import re
 import threading
-from atlasopenmagic.data.id_matches import id_matches
+from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV
 
 # Global variables for caching URLs
 _url_code_mapping = None
 _mapping_lock = threading.Lock()
 
-# Path to the URL file (relative to this module)
-_URL_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'urls.txt')
+# File paths and patterns configuration
+FILE_PATHS = {
+    "standard": os.path.join(os.path.dirname(__file__), 'data', 'urls.txt'),
+    "tev8": os.path.join(os.path.dirname(__file__), 'data', 'urls_TeV8.txt'),
+}
+
+REGEX_PATTERNS = {
+    "standard": r'DAOD_PHYSLITE\.(\d+)\.',
+    "tev8": r'mc_(\d+)\.|Data(\d+)\.',
+}
 
 def _load_url_code_mapping():
     """
-    Load URLs from the file and build a mapping from code to URLs.
-    This function is intended to be called internally.
+    Load URLs from multiple files and build a mapping from codes to URLs.
+    This function will only run once to initialize the mapping.
     """
     global _url_code_mapping
     if _url_code_mapping is not None:
-        return
+        return  # If already loaded, return early
 
     with _mapping_lock:
         if _url_code_mapping is not None:
-            return  # Double-checked locking
+            return  # Double-checked locking to ensure only one thread initializes
 
         _url_code_mapping = {}
-        pattern = re.compile(r'DAOD_PHYSLITE\.(\d+)\.')
 
-        # Open the file using the predefined path
-        with open(_URL_FILE_PATH, 'r') as f:
-            for line in f:
-                url = line.strip()
-                match = pattern.search(url)
-                if match:
-                    code = match.group(1)
-                    _url_code_mapping.setdefault(code, []).append(url)
+        # Loop over each file path and regex pattern and extract URLs
+        for key, file_path in FILE_PATHS.items():
+            if key in REGEX_PATTERNS:
+                regex_pattern = REGEX_PATTERNS[key]
+                regex = re.compile(regex_pattern)
+
+                # Open the file and extract URLs matching the pattern
+                with open(file_path, 'r') as f:
+                    for line in f:
+                        url = line.strip()
+                        match = regex.search(url)
+                        if match:
+                            code = match.group(1) or match.group(2)
+                            _url_code_mapping.setdefault(code, []).append(url)
 
 def get_urls(key):
     """
-    Find URLs corresponding to a given key.
+    Retrieve URLs corresponding to a given key from the cached mapping.
 
     Parameters:
-    - key: The key to search for (as a string or integer).
+    - key: The key to search for (string or integer).
 
     Returns:
-    - A list of URLs matching the key.
+    - A list of URLs associated with the key.
     """
-    # Load the URL-code mapping if not already loaded
+    # Initialize the mapping if not already loaded
     if _url_code_mapping is None:
         _load_url_code_mapping()
 
     value = id_matches.get(str(key))
+    if value is None:
+        value = id_matches_8TeV.get(str(key))
+
     if not value:
         return []
 

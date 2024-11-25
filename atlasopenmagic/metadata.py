@@ -88,3 +88,45 @@ def _load_metadata():
             # Store metadata indexed by dataset_number and physics_short
             _metadata[dataset_number] = row
             _metadata[physics_short] = row
+
+def get_metadata_field(key, field_name, metadata_file=None):
+    """
+    Retrieve a specific metadata field for a given key.
+
+    Parameters:
+    - key: The dataset number or physics short name.
+    - field_name: The name of the metadata field to retrieve.
+    - metadata_file: Optional path to a local metadata CSV file.
+
+    Returns:
+    - The value of the requested metadata field, or None if not found.
+    """
+    if _metadata is None:
+        _load_metadata(metadata_file)
+
+    data = _metadata.get(str(key).strip())
+    if data:
+        return data.get(field_name)
+    else:
+        return None
+
+def get_description(key, metadata_file=None):
+    """
+    Retrieve the description for a given dataset.
+
+    Parameters:
+    - key: The dataset number or physics short name.
+
+    Returns:
+    - The description string, or None if not found.
+    """
+    return get_metadata_field(key, 'description', metadata_file)
+
+def set_release(release):
+    """
+    Set the release year and adjust the metadata source URL or file.
+    """
+    global _METADATA_URL, _metadata
+    with _metadata_lock:
+        _metadata = None  # Clear cached metadata
+        _METADATA_URL = f'https://opendata.atlas.cern/files/{release}_metadata.csv'
