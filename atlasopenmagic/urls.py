@@ -2,6 +2,7 @@ import os
 import re
 import threading
 from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV
+from atlasopenmagic.metadata import current_release
 
 # Global variables for caching URLs
 _url_code_mapping = None
@@ -61,10 +62,14 @@ def get_urls(key):
     # Initialize the mapping if not already loaded
     if _url_code_mapping is None:
         _load_url_code_mapping()
-
-    value = id_matches.get(str(key))
-    if value is None:
+        
+    print(current_release)
+    if current_release == '2024r':
+        value = id_matches.get(str(key))
+    elif current_release == '2016':
         value = id_matches_8TeV.get(str(key))
+    else:
+        value = None
 
     if not value:
         return []

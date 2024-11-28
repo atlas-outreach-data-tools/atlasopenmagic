@@ -1,3 +1,4 @@
+from ast import Raise
 import threading
 import csv
 import requests
@@ -6,6 +7,14 @@ import requests
 _metadata = None
 _metadata_lock = threading.Lock()
 _METADATA_URL = 'https://opendata.atlas.cern/files/metadata.csv'
+
+current_release = '2024r'
+
+LIBRARY_RELEASES = {
+    '2016': 'https://gitlab.cern.ch/richarlu/atlas-open-data-website-v2/-/raw/main/static/files/metadata_8tev.csv',
+    '2024r': 'https://opendata.atlas.cern/files/metadata.csv',
+    # '2020': 'todo',
+}
 
 # Mapping of user-friendly names to actual column names
 COLUMN_MAPPING = {
@@ -42,10 +51,11 @@ def get_metadata(key, var=None):
     # Ensure metadata is loaded
     if _metadata is None:
         _load_metadata()
-
     # Retrieve metadata for the given key
     sample_data = _metadata.get(str(key).strip())
+    print(sample_data)
     if not sample_data:
+        raise ValueError(f"Invalid key: {key}")
         return None
 
     # Translate user-friendly name to actual column name
@@ -75,13 +85,14 @@ def _load_metadata():
 
         _metadata = {}
         data_source = _METADATA_URL
-
+        print(_METADATA_URL)
         # Fetch data from URL
         response = requests.get(data_source)
         response.raise_for_status()
         lines = response.text.splitlines()
 
         reader = csv.DictReader(lines)
+        
         for row in reader:
             dataset_number = row['dataset_number'].strip()
             physics_short = row['physics_short'].strip()
@@ -126,7 +137,14 @@ def set_release(release):
     """
     Set the release year and adjust the metadata source URL or file.
     """
-    global _METADATA_URL, _metadata
+    global _METADATA_URL, _metadata, current_release
+    
     with _metadata_lock:
         _metadata = None  # Clear cached metadata
-        _METADATA_URL = f'https://opendata.atlas.cern/files/{release}_metadata.csv'
+        current_release = release
+        _METADATA_URL = LIBRARY_RELEASES.get(release)
+        
+        if _METADATA_URL is None:
+            raise ValueError(f"Invalid release year: {release}. Use one of: {', '.join(LIBRARY_RELEASES.keys())}")
+        
+        return _METADATA_URL
