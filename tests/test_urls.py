@@ -38,6 +38,7 @@ class TestGetUrls(unittest.TestCase):
                 "DAOD_PHYSLITE.37110878._000003.pool.root.1",
             ]
         }
+        print(get_urls(105985))
         urls = get_urls(700200)
         self.assertEqual(len(urls), 3)
 
