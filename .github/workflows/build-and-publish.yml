@@ -19,15 +19,13 @@ jobs:
       
     steps:
     - uses: actions/checkout@v4
-    - uses: ./.github/workflows/test
     
-    - name: Package the extension
+    - name: Package the files
       run: |
         set -eux
 
         pip install build
         python -m build --sdist
-
 
     - name: Publish distribution to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1

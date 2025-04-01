@@ -20,6 +20,14 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+  "requests"
+]
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["atlasopenmagic*"]
 
 [project.urls]
 "Homepage" = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
