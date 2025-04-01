@@ -9,7 +9,7 @@ name = "atlasopenmagic"
 version = "0.1.0"
 description = "A utility package for retrieving ATLAS open data URLs and metadata."
 authors = [
-    { name="Your Name", email="your.email@example.com" }
+    { name="ATLAS Collaboration", email='atlas-outreach-opendata-support@cern.ch'}
 ]
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -20,6 +20,14 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+  "requests"
+]
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["atlasopenmagic*"]
 
 [project.urls]
 "Homepage" = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
