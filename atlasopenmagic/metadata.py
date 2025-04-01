@@ -27,6 +27,7 @@ REGEX_PATTERNS = {
     "tev8": r'mc_(\d+)\.|Data(\d+)\.',
 }
 
+# ALL keys must be lowercase!
 COLUMN_MAPPING = {
     'dataset_id': 'dataset_number',
     'short_name': 'physics_short',
@@ -78,7 +79,7 @@ def get_metadata(key, var=None):
         raise ValueError(f"Invalid key: {key}. Are you looking into the correct release?")
 
     if var:
-        column_name = COLUMN_MAPPING.get(var)
+        column_name = COLUMN_MAPPING.get(var.lower())
         if column_name:
             return sample_data.get(column_name)
         else:
@@ -97,6 +98,8 @@ def get_urls(key):
         _load_url_code_mapping()
 
     if current_release == '2024r':
+        if key is None:
+            raise ValueError(f"Invalid key: {key}. A DSID is required!")
         value = id_matches.get(str(key))
         if not value:
             raise ValueError(f"Invalid key: {key}. You are looking into the 2024r release, are you sure it's the correct one?")
