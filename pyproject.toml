@@ -23,8 +23,6 @@ classifiers = [
 dependencies = [
   "requests"
 ]
-[tool.setuptools]
-include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["atlasopenmagic*"]

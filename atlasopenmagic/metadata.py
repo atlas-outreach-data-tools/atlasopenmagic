@@ -5,6 +5,9 @@ import csv
 import requests
 from pprint import pprint
 from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV
+from atlasopenmagic.data.urls_mc import url_mapping
+from atlasopenmagic.data.urls_data import url_mapping_data
+
 
 # Allow the default release to be overridden by an environment variable
 current_release = os.environ.get('ATLAS_RELEASE', '2024r-pp')
@@ -32,20 +35,19 @@ RELEASES_DESC = {
 # Mapping of releases to their id match dictionaries
 ID_MATCH_LOOKUP = {
     '2024r-pp': id_matches,
-    '2016e-8tev': id_matches_8TeV,
+    '2016e-8tev': id_matches_8TeV
 }
 
 # Paths to the list of xrootd URLs for different releases 
 FILE_PATHS = {
-    "standard": os.path.join(os.path.dirname(__file__), 'data', 'urls.txt'), #research
-    "tev8": os.path.join(os.path.dirname(__file__), 'data', 'urls_TeV8.txt'),
+    "2024r-pp": os.path.join(os.path.dirname(__file__), 'data', 'urls.txt'), 
+    "2016e-8tev": os.path.join(os.path.dirname(__file__), 'data', 'urls_TeV8.txt'),
 }
 
 # Define naming convention for datasets for different releases
-# standard == research
 REGEX_PATTERNS = {
-    "standard": r'DAOD_PHYSLITE\.(\d+)\.', # Capture the () from DAOD_PHYSLITE.(digits).
-    "tev8": r'mc_(\d+)\.|Data(\d+)\.' # Capture the () from mc_(digits)
+    "2024r-pp": r'DAOD_PHYSLITE\.(\d+)\.', # Capture the () from DAOD_PHYSLITE.(digits).
+    "2016e-8tev": r'mc_(\d+)\.' # Capture the () from mc_(digits)
 }
 
 # The columns of the metadata file are not great, let's use nicer ones for coding (we should probably change the metadata insted?)
@@ -149,7 +151,7 @@ def get_urls(key):
     lookup = ID_MATCH_LOOKUP.get(current_release)
     # If the release is not in the possible releases, raise an error
     if lookup is None:
-        raise ValueError(f"Unsupported release: {current_release}")
+        raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
     
     # Get the value url(s) from the ID match dictionary
     value = lookup.get(str(key))
@@ -159,6 +161,34 @@ def get_urls(key):
     
     return _url_code_mapping.get(value, [])
 
+def available_data():
+    """
+    Returns a list of available data keys for the current release from the url_mapping_data.
+    """
+    current_data_mapping = url_mapping_data.get(current_release)
+    # If the current release is not found in the url_mapping_data, raise an error
+    if current_data_mapping is None:
+        raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
+    return list(current_data_mapping.keys())
+
+def get_urls_data(key):
+    """
+    Retrieve data URLs corresponding to a given data key from the url_mapping_data
+    for the currently selected release.
+    """
+    # Check if the key is valid for the current release
+    current_data_mapping = url_mapping_data.get(current_release)
+    if current_data_mapping is None:
+        raise ValueError(f"Current release '{current_release}' not found in url_mapping_data.")
+    
+    # Get the URLs for the given key
+    urls = current_data_mapping.get(key)
+    # If the key is not found, raise an error
+    if urls is None:
+        available_keys = ', '.join(current_data_mapping.keys())
+        raise ValueError(f"Invalid data key: {key}. Available keys for release '{current_release}' are: {available_keys}.")
+    
+    return urls
 
 #### Internal Helper Functions ####
 
@@ -194,41 +224,41 @@ def _load_metadata():
             # We can use the physics short name to get the metadata as well
             _metadata[physics_short] = row
 
-
 def _load_url_code_mapping():
     """
-    Load URLs from multiple files and build a mapping from codes to URLs.
+    Load URLs from the url_mapping dictionary in data/urls_mc.py and build a mapping from dataset codes to URLs
+    for the currently selected release.
     """
     global _url_code_mapping
 
-    # Check if URL mapping is already loaded and avoid reloading
+    # Avoid reloading if already done
     if _url_code_mapping is not None:
         return
-    # Double-checked locking
+
     with _mapping_lock:
         if _url_code_mapping is not None:
             return  
-        
-        # Initialize the URL mapping dictionary.
+
+        # Retrieve the list of URLs for the current release.
+        urls = url_mapping.get(current_release)
+        if urls is None:
+            raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
+
+        # Initialize the mapping dictionary.
         _url_code_mapping = {}
 
-        # Iterate over all the available datasets
-        for key, file_path in FILE_PATHS.items():
-            # Only process files for which a regex pattern is defined.
-            if key in REGEX_PATTERNS:
-                regex_pattern = REGEX_PATTERNS[key]
-                regex = re.compile(regex_pattern) # Compile pattern for efficient matching
+        # Select the regex pattern based on the release.
+        if current_release == '2024r-pp':
+            regex_pattern = REGEX_PATTERNS["2024r-pp"]
+        elif current_release == '2016e-8tev':
+            regex_pattern = REGEX_PATTERNS.get("2016e-8tev")
+        
+        regex = re.compile(regex_pattern)
 
-                # Open the file containing URLs.
-                with open(file_path, 'r') as f:
-                    for line in f:
-                        url = line.strip() # Remove whitespace
-                        match = regex.search(url) # Search for the pattern in the URL
-                        if match:
-                            # Extract dataset code from the URL using regex groups
-                            # the regex for 8TeV has two groups, one for mc and one for Data
-                            # so we need the or condition
-                            code = match.group(1) or match.group(2)
-                            # Insert the URL into the mapping under the extracted code.
-                            # If the code does not exist in the dictionary, setdefault creates a new list.
-                            _url_code_mapping.setdefault(code, []).append(url)
+        # Process each URL in the list.
+        for url in urls:
+            url = url.strip()
+            match = regex.search(url)
+            if match:
+                code = match.group(1)
+                _url_code_mapping.setdefault(code, []).append(url)
