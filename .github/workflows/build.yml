@@ -3,6 +3,7 @@ name: Install dependencies and build
 on:
     pull_request:
       branches: [ "main" ]
+    workflow_dispatch:
 
 jobs:
   build:
@@ -11,10 +12,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Package the files
+
+    - name: Install the latest version of uv
+      uses: astral-sh/setup-uv@v5
+
+    - name: Build a sdist and wheel
       run: |
         set -eux
 
-        pip install build
-        python -m build --sdist
+        uvx --from build pyproject-build
+
+    - name: Validate package structure with twine
+      run: uvx twine check --strict dist/*
