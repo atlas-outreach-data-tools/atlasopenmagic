@@ -15040,7 +15040,7 @@ url_mapping = {
         "root://eospublic.cern.ch//eos/opendata/atlas/OutreachDatasets/2016-07-29/MC/mc_173044.DYmumuM15to40.root",
         "root://eospublic.cern.ch//eos/opendata/atlas/OutreachDatasets/2016-07-29/MC/mc_173045.DYtautauM08to15.root",
         "root://eospublic.cern.ch//eos/opendata/atlas/OutreachDatasets/2016-07-29/MC/mc_173046.DYtautauM15to40.root"
-    ]
+    ],
 
     # 2025 beta release of Education and Outreach Open Data at 13 TeV
     '2025beta-noskim': [
