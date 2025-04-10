@@ -4,7 +4,7 @@ import threading
 import csv
 import requests
 from pprint import pprint
-from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV
+from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV, id_matches_2025beta
 from atlasopenmagic.data.urls_mc import url_mapping
 from atlasopenmagic.data.urls_data import url_mapping_data
 
@@ -38,17 +38,18 @@ ID_MATCH_LOOKUP = {
     '2016e-8tev': id_matches_8TeV
 }
 
-# Paths to the list of xrootd URLs for different releases 
-FILE_PATHS = {
-    "2024r-pp": os.path.join(os.path.dirname(__file__), 'data', 'urls.txt'), 
-    "2016e-8tev": os.path.join(os.path.dirname(__file__), 'data', 'urls_TeV8.txt'),
-}
-
 # Define naming convention for datasets for different releases
 REGEX_PATTERNS = {
     "2024r-pp": r'DAOD_PHYSLITE\.(\d+)\.', # Capture the () from DAOD_PHYSLITE.(digits).
     "2016e-8tev": r'mc_(\d+)\.' # Capture the () from mc_(digits)
 }
+
+# Programatically generate setups for the skims of the 2025 beta release of Education and Outreach Open Data (13 TeV)
+for askim in ['noskim','2J2LMET30','1LMET30','2bjets','3J1LMET30','exactly4lep','2muons','2to4lep','4lep','exactly3lep','GamGam','3lep']:
+    LIBRARY_RELEASES[f'2025beta-{askim}'] = 'https://opendata.atlas.cern/files/metadata.csv'
+    RELEASES_DESC[f'2025beta-{askim}'] = f'2025 beta Open Data for education and outreach release of 13 TeV pp collisions with {askim} selection applied'
+    ID_MATCH_LOOKUP[f'2025beta-{askim}'] = id_matches_2025beta
+    REGEX_PATTERNS[f'2025beta-{askim}'] = r'mc_(\d+)\.'
 
 # The columns of the metadata file are not great, let's use nicer ones for coding (we should probably change the metadata insted?)
 # ALL keys must be lowercase!
