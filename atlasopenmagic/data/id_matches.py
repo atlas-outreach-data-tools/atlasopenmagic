@@ -423,9 +423,8 @@ id_matches_8TeV = {
     "173045": "173045",
     "173046": "173046"
 }
-
 # Programatically generate setups for the skims of the 2025 beta release of Education and Outreach Open Data (13 TeV)
-id_matches_2025beta = { str(x):str(x) for x in
+id_matches_13TeVbeta = { str(x):str(x) for x in
   [ 301204,301209,301243,301247,301333,301826,301928,302520,302521,302522,
     302523,302524,302525,302526,302527,302528,302529,302530,302531,302532,
     302533,302534,302733,304014,306149,311490,312613,341456,341458,341460,

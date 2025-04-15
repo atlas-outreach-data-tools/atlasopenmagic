@@ -15043,7 +15043,7 @@ url_mapping = {
     ],
 
     # 2025 beta release of Education and Outreach Open Data at 13 TeV
-    '2025beta-noskim': [
+    '2025e-13tev-beta': [
         'root://eospublic.cern.ch//eos/opendata/atlas/rucio/user/egramsta/mc_301204.Pythia8EvtGen_A14MSTW2008LO_Zprime_NoInt_ee_SSM3000.noskim.root',
         'root://eospublic.cern.ch//eos/opendata/atlas/rucio/user/egramsta/mc_301209.Pythia8EvtGen_A14MSTW2008LO_Zprime_NoInt_mumu_SSM3000.noskim.root',
         'root://eospublic.cern.ch//eos/opendata/atlas/rucio/user/egramsta/mc_301243.Pythia8EvtGen_A14NNPDF23LO_Wprime_enu_SSM3000.noskim.root',
@@ -15420,7 +15420,15 @@ url_mapping = {
     ]
 }
 
-# Now through the power of naming conventions, we are going to generate the file names for the other skims of the E&O Open Data 2025 beta release
-for askim in ['2J2LMET30','1LMET30','2bjets','3J1LMET30','exactly4lep','2muons','2to4lep','4lep','exactly3lep','GamGam','3lep']:
-    url_mapping[f'2025beta-{askim}'] = [ x.replace('user/egramsta/',f'opendata/ODEO_FEB2025_v0_{askim}_').replace('.noskim.',f'.{askim}.')
-                                           for x in url_mapping['2025beta-noskim'] ]
+# Create a copy of the original URLs
+original_urls = url_mapping['2025e-13tev-beta'][:]
+
+# Loop over your skim names, and generate new URLs using the original list only
+for askim in ['2J2LMET30', '1LMET30', '2bjets', '3J1LMET30', 'exactly4lep', '2muons',
+              '2to4lep', '4lep', 'exactly3lep', 'GamGam', '3lep']:
+    new_urls = [
+        x.replace('user/egramsta/', f'opendata/ODEO_FEB2025_v0_{askim}_')
+         .replace('.noskim.', f'.{askim}.')
+        for x in original_urls
+    ]
+    url_mapping['2025e-13tev-beta'].extend(new_urls)
