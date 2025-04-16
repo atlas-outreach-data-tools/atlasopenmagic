@@ -28,9 +28,9 @@ LIBRARY_RELEASES = {
 
 # Description of releases so that users don't have to guess
 RELEASES_DESC = {
-    '2016e-8tev': '2016 Open Data for education release for 8 TeV proton-proton collisions.',
-    '2024r-pp': '2024 Open Data for research release for proton-proton collisions.',
-    '2025e-13tev-beta': '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions.',
+    '2016e-8tev': '2016 Open Data for education release for 8 TeV proton-proton collisions (https://opendata.cern/record/3860).',
+    '2024r-pp': '2024 Open Data for research release for proton-proton collisions (https://opendata.cern/record/80020).',
+    '2025e-13tev-beta': '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions (https://opendata.cern.ch/record/93910).',
 }
 
 # Mapping of releases to their id match dictionaries
