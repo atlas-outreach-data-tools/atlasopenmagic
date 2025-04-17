@@ -4,10 +4,9 @@ import threading
 import csv
 import requests
 from pprint import pprint
-from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV
+from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV, id_matches_13TeVbeta
 from atlasopenmagic.data.urls_mc import url_mapping
 from atlasopenmagic.data.urls_data import url_mapping_data
-
 
 # Allow the default release to be overridden by an environment variable
 current_release = os.environ.get('ATLAS_RELEASE', '2024r-pp')
@@ -24,30 +23,28 @@ _mapping_lock = threading.Lock()
 LIBRARY_RELEASES = {
     '2016e-8tev': 'https://opendata.atlas.cern/files/metadata_8tev.csv',
     '2024r-pp': 'https://opendata.atlas.cern/files/metadata.csv',
+    '2025e-13tev-beta': 'https://opendata.atlas.cern/files/metadata.csv'
 }
 
 # Description of releases so that users don't have to guess
 RELEASES_DESC = {
-    '2016e-8tev': '2016 Open Data for education release for 8 TeV pp collisions.',
-    '2024r-pp': '2024 Open Data for research release for proton-proton collisions.'
+    '2016e-8tev': '2016 Open Data for education release for 8 TeV proton-proton collisions (https://opendata.cern/record/3860).',
+    '2024r-pp': '2024 Open Data for research release for proton-proton collisions (https://opendata.cern/record/80020).',
+    '2025e-13tev-beta': '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions (https://opendata.cern.ch/record/93910).',
 }
 
 # Mapping of releases to their id match dictionaries
 ID_MATCH_LOOKUP = {
     '2024r-pp': id_matches,
-    '2016e-8tev': id_matches_8TeV
-}
-
-# Paths to the list of xrootd URLs for different releases 
-FILE_PATHS = {
-    "2024r-pp": os.path.join(os.path.dirname(__file__), 'data', 'urls.txt'), 
-    "2016e-8tev": os.path.join(os.path.dirname(__file__), 'data', 'urls_TeV8.txt'),
+    '2016e-8tev': id_matches_8TeV,
+    '2025e-13tev-beta': id_matches_13TeVbeta
 }
 
 # Define naming convention for datasets for different releases
 REGEX_PATTERNS = {
     "2024r-pp": r'DAOD_PHYSLITE\.(\d+)\.', # Capture the () from DAOD_PHYSLITE.(digits).
-    "2016e-8tev": r'mc_(\d+)\.' # Capture the () from mc_(digits)
+    "2016e-8tev": r'mc_(\d+)\.', # Capture the () from mc_(digits)
+    "2025e-13tev-beta": r'mc_(\d+).*?\.([^.]+)\.root$' # Capture the () from mc_(digits) and the skim from the text between the last dot and ".root"
 }
 
 # The columns of the metadata file are not great, let's use nicer ones for coding (we should probably change the metadata insted?)
@@ -138,28 +135,48 @@ def get_metadata(key, var=None):
 
     return {user_friendly: sample_data[actual_name] for user_friendly, actual_name in COLUMN_MAPPING.items()}
 
-def get_urls(key):
+def get_urls(key, skim='noskim'):
     """
-    Retrieve URLs corresponding to a given key from the cached mapping.
+    Retrieve URLs corresponding to a given dataset key from the cached URL mapping.
+    For the 13TeV beta release, an optional parameter 'skim' is used:
+      - Only URLs that match the exact skim value (by default, 'noskim') are returned.
+      - If the skim value is not found, an error is raised showing the available skim options.
+    For other releases, the skim parameter is ignored and all URLs are returned.
     """
     global _url_code_mapping
 
-    # Check if URL mapping is already loaded
+    # Check if the URL mapping cache has been loaded; if not, load it.
     if _url_code_mapping is None:
         _load_url_code_mapping()
 
+    # Retrieve the mapping lookup dictionary corresponding to the current release.
     lookup = ID_MATCH_LOOKUP.get(current_release)
-    # If the release is not in the possible releases, raise an error
     if lookup is None:
         raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
-    
-    # Get the value url(s) from the ID match dictionary
+
+    # Use the lookup dictionary to get the unique dataset identifier for the provided key.
     value = lookup.get(str(key))
-    # If the key is not found, raise an error
     if not value:
         raise ValueError(f"Invalid key: {key}. Are you sure you're using the correct release ({current_release})?")
-    
-    return _url_code_mapping.get(value, [])
+
+    # Process based on the release type:
+    if current_release == '2025e-13tev-beta':
+        # For the 13TeV beta release, the URL mapping is organized as a nested dictionary:
+        #   { dataset_code: { skim: [url, ...], ... } }
+        mapping = _url_code_mapping.get(value)
+        if mapping is None:
+            # Raise an error if there is no URL mapping for the determined dataset code.
+            raise ValueError(f"No URLs found for dataset id: {value}")
+        if skim not in mapping:
+            # If the requested skim does not exist, raise an error listing available skims.
+            available_skims = ', '.join(mapping.keys())
+            raise ValueError(f"No URLs found for skim: {skim}. Available skim options for this dataset are: {available_skims}.")
+        # Return only the URLs matching the requested skim.
+        return mapping[skim]
+    else:
+        # For all other releases, simply return the list of URLs associated with the dataset code.
+        return _url_code_mapping.get(value, [])
+
 
 def available_data():
     """
@@ -226,39 +243,66 @@ def _load_metadata():
 
 def _load_url_code_mapping():
     """
-    Load URLs from the url_mapping dictionary in data/urls_mc.py and build a mapping from dataset codes to URLs
-    for the currently selected release.
+    Load URLs from the url_mapping dictionary and build a mapping from dataset codes to URLs
+    for the currently selected release. For the '2025e-13tev-beta' release, the function uses
+    a unified regex to extract both the dataset id (from the "mc_<digits>" part) and the skim 
+    tag (the text between the last dot and ".root") from the URLs.
     """
     global _url_code_mapping
 
-    # Avoid reloading if already done
+    # Avoid reloading the URL mapping if it is already built
     if _url_code_mapping is not None:
         return
 
+    # Acquire a lock to ensure thread-safe modifications of the URL mapping cache
     with _mapping_lock:
+        # Check again to be sure that the URL mapping hasn't been loaded in a concurrent thread
         if _url_code_mapping is not None:
             return  
 
-        # Retrieve the list of URLs for the current release.
+        # Retrieve the list of URLs for the current release from the global url_mapping dictionary.
         urls = url_mapping.get(current_release)
         if urls is None:
             raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
 
-        # Initialize the mapping dictionary.
+        # Initialize the URL code mapping cache
         _url_code_mapping = {}
 
-        # Select the regex pattern based on the release.
-        if current_release == '2024r-pp':
-            regex_pattern = REGEX_PATTERNS["2024r-pp"]
-        elif current_release == '2016e-8tev':
-            regex_pattern = REGEX_PATTERNS.get("2016e-8tev")
-        
-        regex = re.compile(regex_pattern)
+        # For '2024r-pp' and '2016e-8tev', use the existing regex-based extraction logic.
+        if current_release in ('2024r-pp', '2016e-8tev'):
+            if current_release == '2024r-pp':
+                regex_pattern = REGEX_PATTERNS["2024r-pp"]
+            else:
+                regex_pattern = REGEX_PATTERNS.get("2016e-8tev")
+            regex = re.compile(regex_pattern)
+            # Process each URL: strip whitespace, apply the regex, and populate the mapping with the extracted dataset id.
+            for url in urls:
+                url = url.strip()
+                match = regex.search(url)
+                if match:
+                    code = match.group(1)
+                    _url_code_mapping.setdefault(code, []).append(url)
 
-        # Process each URL in the list.
-        for url in urls:
-            url = url.strip()
-            match = regex.search(url)
-            if match:
-                code = match.group(1)
-                _url_code_mapping.setdefault(code, []).append(url)
+        # For the '2025e-13tev-beta' release, use a unified regex that focuses on the DID
+        # and extracts the skim tag.
+        elif current_release == '2025e-13tev-beta':
+            # The regex should be defined in REGEX_PATTERNS under the key '2025e-13tev-beta' 
+            # and is expected to capture two groups: 
+            #   1. dataset id from "mc_<digits>"
+            #   2. skim tag from the last dot before ".root"
+            regex_pattern = REGEX_PATTERNS.get("2025e-13tev-beta")
+            regex = re.compile(regex_pattern)
+            # Iterate over each URL, clean it, and attempt to extract dataset id and skim.
+            for url in urls:
+                url = url.strip()
+                match = regex.search(url)
+                if match:
+                    code = match.group(1)             # Extract dataset id from the first group.
+                    skim_extracted = match.group(2)     # Extract skim tag from the second group.
+                    # Build a nested mapping: dataset id -> { skim: [url, ...] }
+                    if code not in _url_code_mapping:
+                        _url_code_mapping[code] = {}
+                    _url_code_mapping[code].setdefault(skim_extracted, []).append(url)
+        else:
+            # Raise an error if the current release is not recognized.
+            raise ValueError(f"Unsupported release: {current_release}.")
