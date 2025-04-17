@@ -13,7 +13,7 @@ pip install atlasopenmagic
 ```
 Alternatively, clone the repository and install locally:
 ```bash
-git clone https://github.com/yourusername/atlasopenmagic.git
+git clone https://github.com/atlas-outreach-data-tools/atlasopenmagic.git
 cd atlasopenmagic
 pip install .
 ```
