@@ -1,4 +1,7 @@
-# **Atlas Open Magic** 🪄📊
+# Atlas Open Magic 🪄📊
+[![Tests](https://github.com/atlas-outreach-data-tools/atlasopenmagic/actions/workflows/test.yml/badge.svg)](https://github.com/atlas-outreach-data-tools/atlasopenmagic/actions/workflows/test.yml)
+![Dynamic TOML Badge](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fatlas-outreach-data-tools%2Fatlasopenmagic%2Frefs%2Fheads%2Fmain%2Fpyproject.toml&query=%24.project.version&label=pypi)
+
 
 **Atlas Open Magic** is a Python package made to simplify working with ATLAS Open Data by providing utilities to manage metadata and URLs for streaming the data.
 
@@ -10,7 +13,7 @@ pip install atlasopenmagic
 ```
 Alternatively, clone the repository and install locally:
 ```bash
-git clone https://github.com/yourusername/atlasopenmagic.git
+git clone https://github.com/atlas-outreach-data-tools/atlasopenmagic.git
 cd atlasopenmagic
 pip install .
 ```
@@ -119,4 +122,4 @@ Contributions are welcome! To contribute:
 Please ensure all tests pass before submitting a pull request.
 
 ## License
-This project is licensed under the [Apache 2.0 License](LICENSE)
+This project is licensed under the [Apache 2.0 License](https://github.com/atlas-outreach-data-tools/atlasopenmagic/blob/main/LICENSE)
