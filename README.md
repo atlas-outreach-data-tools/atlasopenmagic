@@ -48,7 +48,7 @@ And get the URLs for the one that's to be used:
 all_mc = atom.get_urls('2016')
 ```
 
-## Functions description and usage 
+## Metadata functions description and usage 
 ### `available_releases()`
 Shows the available open data releases keys and descriptions.
 
@@ -108,6 +108,19 @@ Retrieves the list of URLs corresponding to one of the keys listed by `available
 **Usage:**
 ```python
 data = get_urls_data('2016')
+```
+## Notebooks utilities description and usage 
+### `install_from_environment(*packages, environment_file)`
+Install specific packages listed in an `environment.yml` file via pip.
+
+Args:
+- `*packages`: Package names to install (e.g., 'coffea', 'dask').
+- `environment_file`: Path to the environment.yml file. If None, defaults to `"../../binder/environment.yml"`.
+
+**Usage:**
+```python
+import atlasopenmagic as atom
+atom.install_from_environment("coffea", "pandas", environment_file="./myfile.yml")
 ```
 
 ## Contributing
