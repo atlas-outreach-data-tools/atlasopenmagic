@@ -1,6 +1,7 @@
 import yaml
 import subprocess
 import sys
+import requests, io
 from pathlib import Path
 
 def install_from_environment(*packages, environment_file=None):
@@ -8,19 +9,25 @@ def install_from_environment(*packages, environment_file=None):
     Install specific packages listed in an environment.yml file via pip.
 
     Args:
-        *packages: Package names to install (e.g., 'coffea', 'dask').
-        environment_file: Path to the environment.yml file. If None, defaults to "../../binder/environment.yml".
+        *packages: Package names to install (e.g., 'coffea', 'dask'). if empty, all packages in the environment.yml will be installed.
+        environment_file: Path to the environment.yml file. If None, defaults to the environment.yml file contained in our notebooks repository.
     """
     if environment_file is None:
-        environment_file = "../../binder/environment.yml"
+        environment_file = "https://raw.githubusercontent.com/atlas-outreach-data-tools/notebooks-collection-opendata/refs/heads/master/binder/environment.yml"
 
-    environment_file = Path(environment_file)
+    is_url = str(environment_file).startswith("http")
+    environment_file = Path(environment_file) if not is_url else environment_file
 
-    if not environment_file.exists():
-        raise FileNotFoundError(f"Environment file not found at {environment_file}")
-
-    with environment_file.open('r') as file:
-        environment_data = yaml.safe_load(file)
+    if not is_url:
+        if not environment_file.exists():
+            raise FileNotFoundError(f"Environment file not found at {environment_file}")
+        with environment_file.open('r') as file:
+            environment_data = yaml.safe_load(file)
+    else:
+        response = requests.get(environment_file)
+        if response.status_code != 200:
+            raise ValueError(f"Failed to fetch environment file from URL: {environment_file}")
+        environment_data = yaml.safe_load(io.StringIO(response.text))
 
     dependencies = environment_data.get('dependencies', None)
 
@@ -42,13 +49,11 @@ def install_from_environment(*packages, environment_file=None):
     conda_packages = []
     pip_packages = []
 
-    for dep in dependencies:
-        if isinstance(dep, str):
-            for pkg in packages:
-                if dep.startswith(pkg):
-                    conda_packages.append(dep)
-        elif isinstance(dep, dict):
-            if 'pip' in dep:
+    if not packages:
+        for dep in dependencies:
+            if isinstance(dep, str):
+                conda_packages.append(dep)
+            elif isinstance(dep, dict) and 'pip' in dep:
                 pip_list = dep['pip']
                 if not isinstance(pip_list, list):
                     raise ValueError(
@@ -61,10 +66,31 @@ def install_from_environment(*packages, environment_file=None):
                         "    - package2>=2.0\n"
                         "---------------------\n"
                     )
-                for pip_dep in pip_list:
-                    for pkg in packages:
-                        if pip_dep.startswith(pkg):
-                            pip_packages.append(pip_dep)
+                pip_packages.extend(pip_list)
+    else:
+        for dep in dependencies:
+            if isinstance(dep, str):
+                for pkg in packages:
+                    if dep.startswith(pkg):
+                        conda_packages.append(dep)
+            elif isinstance(dep, dict):
+                if 'pip' in dep:
+                    pip_list = dep['pip']
+                    if not isinstance(pip_list, list):
+                        raise ValueError(
+                            f"Malformed 'pip:' section in {environment_file}.\n\n"
+                            "Expected structure:\n"
+                            "---------------------\n"
+                            "dependencies:\n"
+                            "  - pip:\n"
+                            "    - package1>=1.0\n"
+                            "    - package2>=2.0\n"
+                            "---------------------\n"
+                        )
+                    for pip_dep in pip_list:
+                        for pkg in packages:
+                            if pip_dep.startswith(pkg):
+                                pip_packages.append(pip_dep)
 
     all_packages = conda_packages + pip_packages
 
