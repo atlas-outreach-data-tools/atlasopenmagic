@@ -92,7 +92,9 @@ def install_from_environment(*packages, environment_file=None):
                             if pip_dep.startswith(pkg):
                                 pip_packages.append(pip_dep)
 
-    all_packages = conda_packages + pip_packages
+    # all_packages = conda_packages + pip_packages
+    # Temporarily only install pip packages, to be decided later whether to install conda packages and how
+    all_packages = pip_packages
 
     if all_packages:
         print(f"Installing packages: {all_packages}")
