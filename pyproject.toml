@@ -12,12 +12,11 @@ authors = [
     { name="ATLAS Collaboration", email='atlas-outreach-opendata-support@cern.ch'}
 ]
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 requires-python = ">=3.6"
 keywords = ["ATLAS", "Open Data", "Utilities"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -29,5 +28,5 @@ dependencies = [
 include = ["atlasopenmagic*"]
 
 [project.urls]
-"Homepage" = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
+"Homepage" = "https://opendata.atlas.cern/"
 "Repository" = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"

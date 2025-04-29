@@ -1,7 +1,7 @@
 import yaml
 import subprocess
 import sys
-import requests, io
+import requests, io, re
 from pathlib import Path
 
 def install_from_environment(*packages, environment_file=None):
@@ -71,7 +71,9 @@ def install_from_environment(*packages, environment_file=None):
         for dep in dependencies:
             if isinstance(dep, str):
                 for pkg in packages:
-                    if dep.startswith(pkg):
+                    # Match the package name at the beginning of the string; this avoids to match two different packages with the same initial name (e.g. torch, tochvision)
+                    base_dep = re.split(r'[=<>]', dep, 1)[0]
+                    if base_dep == pkg:
                         conda_packages.append(dep)
             elif isinstance(dep, dict):
                 if 'pip' in dep:

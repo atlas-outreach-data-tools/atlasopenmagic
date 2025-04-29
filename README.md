@@ -48,7 +48,7 @@ And get the URLs for the one that's to be used:
 all_mc = atom.get_urls('2016')
 ```
 
-## Metadata functions description and usage 
+## Open Data functions description and usage 
 ### `available_releases()`
 Shows the available open data releases keys and descriptions.
 

@@ -8,7 +8,7 @@ from .metadata import (
     available_data
 )
 
-from .notebooks import (
+from .utils import (
     install_from_environment
 )
 
