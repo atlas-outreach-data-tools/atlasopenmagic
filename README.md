@@ -115,7 +115,7 @@ Install specific packages listed in an `environment.yml` file via pip.
 
 Args:
 - `*packages`: Package names to install (e.g., 'coffea', 'dask').
-- `environment_file`: Path to the environment.yml file. If None, defaults to `"../../binder/environment.yml"`.
+- `environment_file`: Path to the environment.yml file. If None, defaults to [the environment file for the educational resources](https://github.com/atlas-outreach-data-tools/notebooks-collection-opendata/blob/master/binder/environment.yml).
 
 **Usage:**
 ```python
