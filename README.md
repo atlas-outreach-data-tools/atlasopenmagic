@@ -144,7 +144,7 @@ Build dataset dictionaries for analysis notebooks.
 
 Args:
 - `defs`: dictionary where keys are sample types and containing a list with DIDs and an optiona color parameter.
-- `skim`: skim to use for the whole dataset.
+- `skim`: skim to use for the whole dataset. Only available for the `2025e-13tev-beta` release.
 - `protocol`: protocol for the urls.
 
 **Usage:**
