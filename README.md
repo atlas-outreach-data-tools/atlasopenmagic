@@ -143,9 +143,9 @@ atom.install_from_environment("coffea", "pandas", environment_file="./myfile.yml
 Build a dict of MC samples URLs.
     
 Args:
-- `mc_defs`: dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
-- `skim` : the MC skim tag (only meaningful in the 2025e-13tev-beta release)
-- `protocol` : 'root' or 'https'
+- `mc_defs`: Dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
+- `skim` : The MC skim tag (only meaningful in the 2025e-13tev-beta release)
+- `protocol` : Protocol to use for URLs.
 
 **Usage:**
 ```python
@@ -161,22 +161,20 @@ mc_defs = {
 mc_samples = build_mc_dataset(mc_defs, skim='2bjets', protocol='https')
 ```
 
-### `build_data_dataset(data_defs, data_keys, protocol='https')`
+### `build_data_dataset(data_keys, name="Data", color=None, protocol="https")`
 Build a dict of Data samples URLS.
 
 Args:
-- `data_defs`: dictionary with data keys, as listed in `available_data`, and optional color: `{ sample_name: {'keys': [...urls...], 'color': ...}, … }`
-- `data_keys` : a single key or list of keys to fetch via get_urls_data
-- `protocol` : 'root' or 'https'
+- `data_keys`: The data_key(s) to fetch (e.g. '2015' or ['2015','2016']).
+- `name`: The key under which the sample appears in the returned dict.
+- `color`: A color string to attach to the sample.
+- `protocol` : Protocol to use for URLs.
 
 **Usage:**
 ```python
 import atlasopenmagic as atom
-data_defs = {
-    'Data': {'color': 'red'},
-}
 
-data_samples = build_data_dataset(data_defs, data_keys=['2015','2016'], protocol='root')
+data_samples = build_data_samples("2bjets", name="Data", color="red", protocol="root")
 ```
 
 ## Contributing

@@ -136,29 +136,21 @@ def build_mc_dataset(mc_defs, skim='noskim', protocol='https'):
         out[name] = sample
     return out
 
-def build_data_dataset(data_defs, data_keys, protocol='https'):
+def build_data_dataset(data_keys, name="Data", color=None, protocol="https"):
     """
-    Build a dict of Data samples URLS.
+    Retrieve and group one or more detector data‐keys under a single sample.
     """
-    # normalize data_keys to a list
     if isinstance(data_keys, str):
         data_keys = [data_keys]
 
-    out = {}
-    for name, info in data_defs.items():
-        urls = []
-        for key in data_keys:
-            urls.extend(get_urls_data(key, protocol=protocol))
-        sample = {'list': urls}
-        if 'color' in info:
-            sample['color'] = info['color']
-        out[name] = sample
-    return out
-    """
-    Build a url dict for detector data
-    """
-    urls = get_urls_data(skim, protocol)
-    sample = {'list': urls}
+    # Gather all URLs
+    urls = []
+    for key in data_keys:
+        urls.extend(get_urls_data(key, protocol=protocol))
+
+    # Build the single‐sample dict
+    sample = {"list": urls}
     if color is not None:
-        sample['color'] = color
-    return sample
+        sample["color"] = color
+
+    return {name: sample}
