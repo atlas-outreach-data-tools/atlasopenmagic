@@ -135,7 +135,7 @@ def get_metadata(key, var=None):
 
     return {user_friendly: sample_data[actual_name] for user_friendly, actual_name in COLUMN_MAPPING.items()}
 
-def get_urls(key, skim='noskim'):
+def get_urls(key, skim='noskim', protocol='root'):
     """
     Retrieve URLs corresponding to a given dataset key from the cached URL mapping.
     For the 13TeV beta release, an optional parameter 'skim' is used:
@@ -172,10 +172,17 @@ def get_urls(key, skim='noskim'):
             available_skims = ', '.join(mapping.keys())
             raise ValueError(f"No URLs found for skim: {skim}. Available skim options for this dataset are: {available_skims}.")
         # Return only the URLs matching the requested skim.
-        return mapping[skim]
+        raw_urls = mapping[skim]
     else:
         # For all other releases, simply return the list of URLs associated with the dataset code.
-        return _url_code_mapping.get(value, [])
+        raw_urls = _url_code_mapping.get(value, [])
+    
+    # Apply the protocol to the URLs based on the requested protocol.
+    proto = protocol.lower()
+    if proto not in ('root', 'https'):
+        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root' or 'https'.")
+
+    return [_apply_protocol(u, proto) for u in raw_urls]
 
 
 def available_data():
@@ -188,7 +195,7 @@ def available_data():
         raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
     return list(current_data_mapping.keys())
 
-def get_urls_data(key):
+def get_urls_data(key, protocol='root'):
     """
     Retrieve data URLs corresponding to a given data key from the url_mapping_data
     for the currently selected release.
@@ -199,13 +206,17 @@ def get_urls_data(key):
         raise ValueError(f"Current release '{current_release}' not found in url_mapping_data.")
     
     # Get the URLs for the given key
-    urls = current_data_mapping.get(key)
+    raw_urls = current_data_mapping.get(key)
     # If the key is not found, raise an error
-    if urls is None:
+    if raw_urls is None:
         available_keys = ', '.join(current_data_mapping.keys())
         raise ValueError(f"Invalid data key: {key}. Available keys for release '{current_release}' are: {available_keys}.")
     
-    return urls
+    proto = protocol.lower()
+    if proto not in ('root', 'https'):
+        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root' or 'https'.")
+
+    return [_apply_protocol(u, proto) for u in raw_urls]
 
 #### Internal Helper Functions ####
 
@@ -306,3 +317,15 @@ def _load_url_code_mapping():
         else:
             # Raise an error if the current release is not recognized.
             raise ValueError(f"Unsupported release: {current_release}.")
+
+def _apply_protocol(url, protocol):
+    """
+    If protocol=='https', rewrite the EOS root URL to HTTPS;
+    if protocol=='root', return the URL unchanged.
+    """
+    if protocol == 'https':
+        return url.replace(
+            'root://eospublic.cern.ch',
+            'https://opendata.cern.ch'
+        )
+    return url

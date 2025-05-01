@@ -9,7 +9,8 @@ from .metadata import (
 )
 
 from .utils import (
-    install_from_environment
+    install_from_environment,
+    build_dataset
 )
 
 # List of public functions available when importing the package

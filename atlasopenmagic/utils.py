@@ -3,6 +3,7 @@ import subprocess
 import sys
 import requests, io, re
 from pathlib import Path
+from atlasopenmagic.metadata import get_urls, get_urls_data
 
 def install_from_environment(*packages, environment_file=None):
     """
@@ -119,3 +120,41 @@ def install_from_environment(*packages, environment_file=None):
             f"No matching packages found for {packages} in {environment_file}.\n\n"
             "Make sure the package names exactly match the beginning of the package entries in the file.\n"
         )
+
+def build_dataset(defs, skim='noskim', protocol='https'):
+    """
+    Build a dictionary of datasets urls for use in analysis notebooks.
+    """
+    out = {}
+    for name, info in defs.items():
+        color   = info.get('color')
+        if 'dids' in info:
+            # MC sample
+            out[name] = _make_mc_sample(*info['dids'], skim=skim, protocol=protocol, color=color)
+        else:
+            # Data sample
+            out[name] = _make_data_sample(skim, protocol=protocol, color=color)
+    return out
+
+#### Internal Helper Functions ####
+def _make_mc_sample(*dids, skim, protocol, color=None):
+    """
+    Build a url dict for one or more MC DIDs
+    """
+    urls = []
+    for did in dids:
+        urls.extend(get_urls(str(did), skim, protocol))
+    sample = {'list': urls}
+    if color is not None:
+        sample['color'] = color
+    return sample
+
+def _make_data_sample(skim, protocol, color=None):
+    """
+    Build a url dict for detector data
+    """
+    urls = get_urls_data(skim, protocol)
+    sample = {'list': urls}
+    if color is not None:
+        sample['color'] = color
+    return sample
