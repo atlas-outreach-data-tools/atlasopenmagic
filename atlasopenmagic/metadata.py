@@ -143,6 +143,15 @@ def get_urls(key, skim='noskim', protocol='root'):
       - If the skim value is not found, an error is raised showing the available skim options.
     For other releases, the skim parameter is ignored and all URLs are returned.
     """
+
+    # If they’re asking for a skim outside of 13 TeV‐β, warn them
+    if current_release != '2025e-13tev-beta' and skim != 'noskim':
+        warnings.warn(
+            f"Skims are only availabe in the '2025e-13tev-beta' release; "
+            f"in release '{current_release}' all skims are ignored.",
+            UserWarning
+        )
+
     global _url_code_mapping
 
     # Check if the URL mapping cache has been loaded; if not, load it.
@@ -183,7 +192,6 @@ def get_urls(key, skim='noskim', protocol='root'):
         raise ValueError(f"Invalid protocol '{proto}'. Must be 'root' or 'https'.")
 
     return [_apply_protocol(u, proto) for u in raw_urls]
-
 
 def available_data():
     """
