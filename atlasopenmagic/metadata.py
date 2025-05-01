@@ -213,9 +213,21 @@ def get_urls_data(key, protocol='root'):
     current_data_mapping = url_mapping_data.get(current_release)
     if current_data_mapping is None:
         raise ValueError(f"Current release '{current_release}' not found in url_mapping_data.")
+
+     # Branch on release to decide whether `key` is a skim or a data_key
+    if current_release == '2025e-13tev-beta':
+        skim = key
+        available = ', '.join(current_data_mapping.keys())
+        raw_urls = current_data_mapping.get(skim)
+        if raw_urls is None:
+            raise ValueError(f"Invalid skim '{skim}'. Available skims: {available}.")
+    else:
+        data_key = key
+        available = ', '.join(current_data_mapping.keys())
+        raw_urls = current_data_mapping.get(data_key)
+        if raw_urls is None:
+            raise ValueError(f"Invalid data key '{data_key}'. Available data keys: {available}.")
     
-    # Get the URLs for the given key
-    raw_urls = current_data_mapping.get(key)
     # If the key is not found, raise an error
     if raw_urls is None:
         available_keys = ', '.join(current_data_mapping.keys())

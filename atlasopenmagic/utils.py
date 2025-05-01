@@ -121,35 +121,39 @@ def install_from_environment(*packages, environment_file=None):
             "Make sure the package names exactly match the beginning of the package entries in the file.\n"
         )
 
-def build_dataset(defs, skim='noskim', protocol='https'):
+def build_mc_dataset(mc_defs, skim='noskim', protocol='https'):
     """
-    Build a dictionary of datasets urls for use in analysis notebooks.
+    Build a dict of MC samples URLs.
     """
     out = {}
-    for name, info in defs.items():
-        color   = info.get('color')
-        if 'dids' in info:
-            # MC sample
-            out[name] = _make_mc_sample(*info['dids'], skim=skim, protocol=protocol, color=color)
-        else:
-            # Data sample
-            out[name] = _make_data_sample(skim, protocol=protocol, color=color)
+    for name, info in mc_defs.items():
+        urls = []
+        for did in info['dids']:
+            urls.extend(get_urls(str(did), skim=skim, protocol=protocol))
+        sample = {'list': urls}
+        if 'color' in info:
+            sample['color'] = info['color']
+        out[name] = sample
     return out
 
-#### Internal Helper Functions ####
-def _make_mc_sample(*dids, skim, protocol, color=None):
+def build_data_dataset(data_defs, data_keys, protocol='https'):
     """
-    Build a url dict for one or more MC DIDs
+    Build a dict of Data samples URLS.
     """
-    urls = []
-    for did in dids:
-        urls.extend(get_urls(str(did), skim, protocol))
-    sample = {'list': urls}
-    if color is not None:
-        sample['color'] = color
-    return sample
+    # normalize data_keys to a list
+    if isinstance(data_keys, str):
+        data_keys = [data_keys]
 
-def _make_data_sample(skim, protocol, color=None):
+    out = {}
+    for name, info in data_defs.items():
+        urls = []
+        for key in data_keys:
+            urls.extend(get_urls_data(key, protocol=protocol))
+        sample = {'list': urls}
+        if 'color' in info:
+            sample['color'] = info['color']
+        out[name] = sample
+    return out
     """
     Build a url dict for detector data
     """
