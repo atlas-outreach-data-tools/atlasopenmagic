@@ -6,27 +6,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlasopenmagic"
-version = "0.3.1"
+version = "0.4.0"
 description = "A utility package for retrieving ATLAS open data URLs and metadata."
 authors = [
     { name="ATLAS Collaboration", email='atlas-outreach-opendata-support@cern.ch'}
 ]
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 requires-python = ">=3.6"
 keywords = ["ATLAS", "Open Data", "Utilities"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "requests"
+  "requests",
+  "pyyaml"
 ]
 
 [tool.setuptools.packages.find]
 include = ["atlasopenmagic*"]
 
 [project.urls]
-"Homepage" = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
+"Homepage" = "https://opendata.atlas.cern/"
 "Repository" = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
