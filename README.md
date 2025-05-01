@@ -173,7 +173,7 @@ Args:
 ```python
 import atlasopenmagic as atom
 data_defs = {
-    'Data': {'data': ['2015'], 'color': 'red'},
+    'Data': {'color': 'red'},
 }
 
 data_samples = build_data_dataset(data_defs, data_keys=['2015','2016'], protocol='root')
