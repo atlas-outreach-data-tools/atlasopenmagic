@@ -36,3 +36,10 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         skip-existing: true
+        
+    - name: Notify Mattermost of release
+      if: success()
+      run: |
+        curl -i -X POST -H 'Content-Type: application/json' -d '{
+          "text": ":rocket: *New atlasopenmagic release published!*\n\nVersion: ${{ github.event.release.tag_name }}\nRepository: ${{ github.repository }}\n\nView on PyPI: https://pypi.org/project/atlasopenmagic/\nChangelog: ${{ github.event.release.html_url }}\n\n:tada: Thank you to all contributors!"
+        }' "${{ secrets.MATTERMOST_WEBHOOK_URL }}"
