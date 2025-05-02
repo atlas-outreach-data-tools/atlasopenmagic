@@ -9,7 +9,9 @@ from .metadata import (
 )
 
 from .utils import (
-    install_from_environment
+    install_from_environment,
+    build_mc_dataset,
+    build_data_dataset
 )
 
 # List of public functions available when importing the package
@@ -21,5 +23,7 @@ __all__ = [
     "get_current_release",
     "get_urls_data",
     "available_data",
-    "install_from_environment"
+    "install_from_environment",
+    "build_mc_dataset",
+    "build_data_dataset",
 ]

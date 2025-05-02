@@ -68,12 +68,19 @@ print(release)
 ### `set_release(release)`
 Set the release (scope) in which to look for information (research open data, education 8 TeV, et). The `release` passed to the function has to be one of the keys listed by `available_releases()`.
 
+Args:
+- `release`: name of the release to use.
+
 **Usage:**
 ```python
 atom.set_release('2024r-pp')
 ```
-### `get_metadata(key, *var)`
+### `get_metadata(key, var)`
 Get metadata information for MC data.
+
+Args:
+- `key`: Dataset ID.
+- `var`: Variable to retrieve.
 
 **Usage:**
 You can get a dictionary with all the metadata
@@ -88,26 +95,35 @@ The available variables are: `dataset_id`, `short_name`, `e-tag`, `cross_section
 
 The keys to be used for research data are the Dataset IDs found in the [Monte Carlo Metadata](https://opendata.atlas.cern/docs/data/for_research/metadata)
 
-### `get_urls(key)`
+### `get_urls(key, skim, protocol)`
 Retrieves the list of URLs corresponding to a given key. This is used for MC data.
+
+Args:
+- `key`: Dataset ID.
+- `skim`: Skim for the dataset. This parameter is only taken into account when using the `2025e-13tev-beta` release.
+- `protocol`: protocol for the URLs. Options: 'root' and 'https'.
 
 **Usage:**
 ```python
-urls = atom.get_urls('12345')
+urls = atom.get_urls('12345', protocol='root')
 ```
 ### `available_data()`
-Retrieves the list of keys for the data available for a scope.
+Retrieves the list of keys for the data available for a scope/release.
 
 **Usage:**
 ```python
 atom.available_data()
 ```
-### `get_urls_data(data_key)`
+### `get_urls_data(data_key, protocol)`
 Retrieves the list of URLs corresponding to one of the keys listed by `available_data()`.
+
+Args:
+- `data_key` : For non-beta releases (e.g. '2015', '2016', etc.), the data key to look up.
+- `skim` : Only for the 2025e-13tev-beta release: the skim name to look up.
 
 **Usage:**
 ```python
-data = get_urls_data('2016')
+data = get_urls_data(data_key='2016', protocol='https')
 ```
 ## Notebooks utilities description and usage 
 ### `install_from_environment(*packages, environment_file)`
@@ -121,6 +137,44 @@ Args:
 ```python
 import atlasopenmagic as atom
 atom.install_from_environment("coffea", "pandas", environment_file="./myfile.yml")
+```
+
+### `build_mc_dataset(mc_defs, skim='noskim', protocol='https')`
+Build a dict of MC samples URLs.
+    
+Args:
+- `mc_defs`: Dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
+- `skim` : The MC skim tag (only meaningful in the 2025e-13tev-beta release)
+- `protocol` : Protocol to use for URLs.
+
+**Usage:**
+```python
+import atlasopenmagic as atom
+mc_defs = {
+    r'Background $t\bar t$':    {'dids': [410470],                      'color': 'yellow'},
+    r'Background $V+$jets':     {'dids': [700335,700336,700337],        'color': 'orange'},
+    r'Background Diboson':      {'dids': [700488,700489,700490,700491],'color': 'green'},
+    r'Background $ZZ^{*}$':     {'dids': [700600,700601],               'color': '#ff0000'},
+    r'Signal ($m_H$=125 GeV)':  {'dids': [345060,346228],              'color': '#00cdff'},
+}
+
+mc_samples = build_mc_dataset(mc_defs, skim='2bjets', protocol='https')
+```
+
+### `build_data_dataset(data_keys, name="Data", color=None, protocol="https")`
+Build a dict of Data samples URLS.
+
+Args:
+- `data_keys`: The data_key(s) to fetch (e.g. '2015' or ['2015','2016']).
+- `name`: The key under which the sample appears in the returned dict.
+- `color`: A color string to attach to the sample.
+- `protocol` : Protocol to use for URLs.
+
+**Usage:**
+```python
+import atlasopenmagic as atom
+
+data_samples = build_data_samples("2bjets", name="Data", color="red", protocol="root")
 ```
 
 ## Contributing

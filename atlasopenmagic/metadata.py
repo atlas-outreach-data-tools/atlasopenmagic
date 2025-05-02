@@ -3,6 +3,7 @@ import re
 import threading
 import csv
 import requests
+import warnings
 from pprint import pprint
 from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV, id_matches_13TeVbeta
 from atlasopenmagic.data.urls_mc import url_mapping
@@ -135,7 +136,7 @@ def get_metadata(key, var=None):
 
     return {user_friendly: sample_data[actual_name] for user_friendly, actual_name in COLUMN_MAPPING.items()}
 
-def get_urls(key, skim='noskim'):
+def get_urls(key, skim='noskim', protocol='root'):
     """
     Retrieve URLs corresponding to a given dataset key from the cached URL mapping.
     For the 13TeV beta release, an optional parameter 'skim' is used:
@@ -143,6 +144,15 @@ def get_urls(key, skim='noskim'):
       - If the skim value is not found, an error is raised showing the available skim options.
     For other releases, the skim parameter is ignored and all URLs are returned.
     """
+
+    # If they’re asking for a skim outside of 13 TeV‐β, warn them
+    if current_release != '2025e-13tev-beta' and skim != 'noskim':
+        warnings.warn(
+            f"Skims are only availabe in the '2025e-13tev-beta' release; "
+            f"in release '{current_release}' all skims are ignored.",
+            UserWarning
+        )
+
     global _url_code_mapping
 
     # Check if the URL mapping cache has been loaded; if not, load it.
@@ -172,11 +182,17 @@ def get_urls(key, skim='noskim'):
             available_skims = ', '.join(mapping.keys())
             raise ValueError(f"No URLs found for skim: {skim}. Available skim options for this dataset are: {available_skims}.")
         # Return only the URLs matching the requested skim.
-        return mapping[skim]
+        raw_urls = mapping[skim]
     else:
         # For all other releases, simply return the list of URLs associated with the dataset code.
-        return _url_code_mapping.get(value, [])
+        raw_urls = _url_code_mapping.get(value, [])
+    
+    # Apply the protocol to the URLs based on the requested protocol.
+    proto = protocol.lower()
+    if proto not in ('root', 'https'):
+        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root' or 'https'.")
 
+    return [_apply_protocol(u, proto) for u in raw_urls]
 
 def available_data():
     """
@@ -188,7 +204,7 @@ def available_data():
         raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
     return list(current_data_mapping.keys())
 
-def get_urls_data(key):
+def get_urls_data(key, protocol='root'):
     """
     Retrieve data URLs corresponding to a given data key from the url_mapping_data
     for the currently selected release.
@@ -197,15 +213,31 @@ def get_urls_data(key):
     current_data_mapping = url_mapping_data.get(current_release)
     if current_data_mapping is None:
         raise ValueError(f"Current release '{current_release}' not found in url_mapping_data.")
+
+     # Branch on release to decide whether `key` is a skim or a data_key
+    if current_release == '2025e-13tev-beta':
+        skim = key
+        available = ', '.join(current_data_mapping.keys())
+        raw_urls = current_data_mapping.get(skim)
+        if raw_urls is None:
+            raise ValueError(f"Invalid skim '{skim}'. Available skims: {available}.")
+    else:
+        data_key = key
+        available = ', '.join(current_data_mapping.keys())
+        raw_urls = current_data_mapping.get(data_key)
+        if raw_urls is None:
+            raise ValueError(f"Invalid data key '{data_key}'. Available data keys: {available}.")
     
-    # Get the URLs for the given key
-    urls = current_data_mapping.get(key)
     # If the key is not found, raise an error
-    if urls is None:
+    if raw_urls is None:
         available_keys = ', '.join(current_data_mapping.keys())
         raise ValueError(f"Invalid data key: {key}. Available keys for release '{current_release}' are: {available_keys}.")
     
-    return urls
+    proto = protocol.lower()
+    if proto not in ('root', 'https'):
+        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root' or 'https'.")
+
+    return [_apply_protocol(u, proto) for u in raw_urls]
 
 #### Internal Helper Functions ####
 
@@ -306,3 +338,15 @@ def _load_url_code_mapping():
         else:
             # Raise an error if the current release is not recognized.
             raise ValueError(f"Unsupported release: {current_release}.")
+
+def _apply_protocol(url, protocol):
+    """
+    If protocol=='https', rewrite the EOS root URL to HTTPS;
+    if protocol=='root', return the URL unchanged.
+    """
+    if protocol == 'https':
+        return url.replace(
+            'root://eospublic.cern.ch',
+            'https://opendata.cern.ch'
+        )
+    return url

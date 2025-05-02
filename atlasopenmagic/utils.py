@@ -3,6 +3,7 @@ import subprocess
 import sys
 import requests, io, re
 from pathlib import Path
+from atlasopenmagic.metadata import get_urls, get_urls_data
 
 def install_from_environment(*packages, environment_file=None):
     """
@@ -119,3 +120,37 @@ def install_from_environment(*packages, environment_file=None):
             f"No matching packages found for {packages} in {environment_file}.\n\n"
             "Make sure the package names exactly match the beginning of the package entries in the file.\n"
         )
+
+def build_mc_dataset(mc_defs, skim='noskim', protocol='https'):
+    """
+    Build a dict of MC samples URLs.
+    """
+    out = {}
+    for name, info in mc_defs.items():
+        urls = []
+        for did in info['dids']:
+            urls.extend(get_urls(str(did), skim=skim, protocol=protocol))
+        sample = {'list': urls}
+        if 'color' in info:
+            sample['color'] = info['color']
+        out[name] = sample
+    return out
+
+def build_data_dataset(data_keys, name="Data", color=None, protocol="https"):
+    """
+    Retrieve and group one or more detector data‐keys under a single sample.
+    """
+    if isinstance(data_keys, str):
+        data_keys = [data_keys]
+
+    # Gather all URLs
+    urls = []
+    for key in data_keys:
+        urls.extend(get_urls_data(key, protocol=protocol))
+
+    # Build the single‐sample dict
+    sample = {"list": urls}
+    if color is not None:
+        sample["color"] = color
+
+    return {name: sample}
