@@ -1,15 +1,13 @@
-# pyproject.toml
-
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "atlasopenmagic"
-version = "0.5.0"
+version = "0.5.1"
 description = "A utility package for retrieving ATLAS open data URLs and metadata."
 authors = [
-    { name="ATLAS Collaboration", email='atlas-outreach-opendata-support@cern.ch'}
+    { name="ATLAS Collaboration", email="atlas-outreach-opendata-support@cern.ch" }
 ]
 readme = "README.md"
 license = "Apache-2.0"
@@ -20,13 +18,13 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "requests",
-  "pyyaml"
+    "requests",
+    "pyyaml"
 ]
 
-[tool.setuptools.packages.find]
-include = ["atlasopenmagic*"]
-
 [project.urls]
-"Homepage" = "https://opendata.atlas.cern/"
-"Repository" = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
+Homepage = "https://opendata.atlas.cern/"
+Repository = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
+
+[tool.hatch.build]
+packages = ["atlasopenmagic"]
