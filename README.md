@@ -186,7 +186,7 @@ Contributions are welcome! To contribute:
 4. Push to the branch (`git push origin feature-name`).
 5. Create a Pull Request.
 
-Please ensure all tests pass before submitting a pull request.
+Please ensure all tests pass before submitting a pull request (just run `pytest` from the main directory of the package).
 
 ## License
 This project is licensed under the [Apache 2.0 License](https://github.com/atlas-outreach-data-tools/atlasopenmagic/blob/main/LICENSE)
