@@ -5,7 +5,7 @@ import csv
 import requests
 import warnings
 from pprint import pprint
-from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV, id_matches_13TeVbeta
+from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV, id_matches_13TeV2020, id_matches_13TeVbeta
 from atlasopenmagic.data.urls_mc import url_mapping
 from atlasopenmagic.data.urls_data import url_mapping_data
 
@@ -29,7 +29,8 @@ LIBRARY_RELEASES = {
 
 # Description of releases so that users don't have to guess
 RELEASES_DESC = {
-    '2016e-8tev': '2016 Open Data for education release for 8 TeV proton-proton collisions (https://opendata.cern/record/3860).',
+    '2016e-8tev': '2016 Open Data for education release of 8 TeV proton-proton collisions (https://opendata.cern/record/3860).',
+    '2020e-13tev': '2020 Open Data for education release of 13 TeV proton-proton collisions (https://cern.ch/2r7xt).',
     '2024r-pp': '2024 Open Data for research release for proton-proton collisions (https://opendata.cern/record/80020).',
     '2025e-13tev-beta': '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions (https://opendata.cern.ch/record/93910).',
 }
@@ -38,6 +39,7 @@ RELEASES_DESC = {
 ID_MATCH_LOOKUP = {
     '2024r-pp': id_matches,
     '2016e-8tev': id_matches_8TeV,
+    '2020e-13tev': id_matches_13TeV2020,
     '2025e-13tev-beta': id_matches_13TeVbeta
 }
 
@@ -45,8 +47,11 @@ ID_MATCH_LOOKUP = {
 REGEX_PATTERNS = {
     "2024r-pp": r'DAOD_PHYSLITE\.(\d+)\.', # Capture the () from DAOD_PHYSLITE.(digits).
     "2016e-8tev": r'mc_(\d+)\.', # Capture the () from mc_(digits)
+    "2020e-13tev": r'mc_(\d+).*?\.([^.]+)\.root$', # Capture the () from mc_(digits) and the skim from the text between the last dot and ".root"
     "2025e-13tev-beta": r'mc_(\d+).*?\.([^.]+)\.root$' # Capture the () from mc_(digits) and the skim from the text between the last dot and ".root"
 }
+
+RELEASE_HAS_SKIMS = [ '2020e-13tev' , '2025e-13tev-beta' ]
 
 # The columns of the metadata file are not great, let's use nicer ones for coding (we should probably change the metadata insted?)
 # ALL keys must be lowercase!
@@ -139,16 +144,16 @@ def get_metadata(key, var=None):
 def get_urls(key, skim='noskim', protocol='root'):
     """
     Retrieve URLs corresponding to a given dataset key from the cached URL mapping.
-    For the 13TeV beta release, an optional parameter 'skim' is used:
+    For the releases in RELEASE_HAS_SKIMS, an optional parameter 'skim' is used:
       - Only URLs that match the exact skim value (by default, 'noskim') are returned.
       - If the skim value is not found, an error is raised showing the available skim options.
     For other releases, the skim parameter is ignored and all URLs are returned.
     """
 
-    # If they’re asking for a skim outside of 13 TeV‐β, warn them
-    if current_release != '2025e-13tev-beta' and skim != 'noskim':
+    # If they're asking for a skim outside of the places we have them, warn them
+    if current_release not in RELEASE_HAS_SKIMS and skim != 'noskim':
         warnings.warn(
-            f"Skims are only availabe in the '2025e-13tev-beta' release; "
+            f"Skims are only availabe in the releases {RELEASE_HAS_SKIMS}; "
             f"in release '{current_release}' all skims are ignored.",
             UserWarning
         )
@@ -170,8 +175,8 @@ def get_urls(key, skim='noskim', protocol='root'):
         raise ValueError(f"Invalid key: {key}. Are you sure you're using the correct release ({current_release})?")
 
     # Process based on the release type:
-    if current_release == '2025e-13tev-beta':
-        # For the 13TeV beta release, the URL mapping is organized as a nested dictionary:
+    if current_release in RELEASE_HAS_SKIMS:
+        # For the releases with skims, the URL mapping is organized as a nested dictionary:
         #   { dataset_code: { skim: [url, ...], ... } }
         mapping = _url_code_mapping.get(value)
         if mapping is None:
@@ -215,7 +220,7 @@ def get_urls_data(key, protocol='root'):
         raise ValueError(f"Current release '{current_release}' not found in url_mapping_data.")
 
      # Branch on release to decide whether `key` is a skim or a data_key
-    if current_release == '2025e-13tev-beta':
+    if current_release in RELEASE_HAS_SKIMS:
         skim = key
         available = ', '.join(current_data_mapping.keys())
         raw_urls = current_data_mapping.get(skim)
@@ -276,7 +281,7 @@ def _load_metadata():
 def _load_url_code_mapping():
     """
     Load URLs from the url_mapping dictionary and build a mapping from dataset codes to URLs
-    for the currently selected release. For the '2025e-13tev-beta' release, the function uses
+    for the currently selected release. For the releases in RELEASE_HAS_SKIMS, the function uses
     a unified regex to extract both the dataset id (from the "mc_<digits>" part) and the skim 
     tag (the text between the last dot and ".root") from the URLs.
     """
@@ -302,10 +307,7 @@ def _load_url_code_mapping():
 
         # For '2024r-pp' and '2016e-8tev', use the existing regex-based extraction logic.
         if current_release in ('2024r-pp', '2016e-8tev'):
-            if current_release == '2024r-pp':
-                regex_pattern = REGEX_PATTERNS["2024r-pp"]
-            else:
-                regex_pattern = REGEX_PATTERNS.get("2016e-8tev")
+            regex_pattern = REGEX_PATTERNS.get(current_release)
             regex = re.compile(regex_pattern)
             # Process each URL: strip whitespace, apply the regex, and populate the mapping with the extracted dataset id.
             for url in urls:
@@ -315,14 +317,14 @@ def _load_url_code_mapping():
                     code = match.group(1)
                     _url_code_mapping.setdefault(code, []).append(url)
 
-        # For the '2025e-13tev-beta' release, use a unified regex that focuses on the DID
+        # For the releases with skims, use a unified regex that focuses on the DID
         # and extracts the skim tag.
-        elif current_release == '2025e-13tev-beta':
-            # The regex should be defined in REGEX_PATTERNS under the key '2025e-13tev-beta' 
+        elif current_release in RELEASE_HAS_SKIMS:
+            # The regex should be defined in REGEX_PATTERNS under the key for the release
             # and is expected to capture two groups: 
             #   1. dataset id from "mc_<digits>"
             #   2. skim tag from the last dot before ".root"
-            regex_pattern = REGEX_PATTERNS.get("2025e-13tev-beta")
+            regex_pattern = REGEX_PATTERNS.get(current_release)
             regex = re.compile(regex_pattern)
             # Iterate over each URL, clean it, and attempt to extract dataset id and skim.
             for url in urls:
