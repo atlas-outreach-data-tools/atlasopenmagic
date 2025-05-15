@@ -23,6 +23,7 @@ _mapping_lock = threading.Lock()
 # Keys should be: year + e or r (education/research) + tag (for education the center of mass energy, for research the type of data)
 LIBRARY_RELEASES = {
     '2016e-8tev': 'https://opendata.atlas.cern/files/metadata_8tev.csv',
+    '2020e-13tev': 'https://opendata.atlas.cern/files/metadata_2020e_13tev.csv',
     '2024r-pp': 'https://opendata.atlas.cern/files/metadata.csv',
     '2025e-13tev-beta': 'https://opendata.atlas.cern/files/metadata.csv'
 }
