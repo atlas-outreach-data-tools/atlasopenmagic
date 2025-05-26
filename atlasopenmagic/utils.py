@@ -115,6 +115,7 @@ def install_from_environment(*packages, environment_file=None):
         pip_command += all_packages
 
         subprocess.run(pip_command, check=True)
+        print("Installation complete. You may need to restart your Python environment for changes to take effect.")
     else:
         raise ValueError(
             f"No matching packages found for {packages} in {environment_file}.\n\n"
