@@ -76,6 +76,11 @@ COLUMN_MAPPING = {
 # Set the metadata URL based on the current release
 _METADATA_URL = LIBRARY_RELEASES[current_release]
 
+# Little helper function to check protocols
+def check_proto(proto):
+    if proto not in ('root', 'https', 'eos'):
+        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root', 'https', or 'eos'.")
+
 # People need to be able to get information about the releases
 def available_releases():
     """
@@ -195,8 +200,7 @@ def get_urls(key, skim='noskim', protocol='root'):
     
     # Apply the protocol to the URLs based on the requested protocol.
     proto = protocol.lower()
-    if proto not in ('root', 'https'):
-        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root' or 'https'.")
+    check_proto(proto)
 
     return [_apply_protocol(u, proto) for u in raw_urls]
 
@@ -240,8 +244,7 @@ def get_urls_data(key, protocol='root'):
         raise ValueError(f"Invalid data key: {key}. Available keys for release '{current_release}' are: {available_keys}.")
     
     proto = protocol.lower()
-    if proto not in ('root', 'https'):
-        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root' or 'https'.")
+    check_proto(proto)
 
     return [_apply_protocol(u, proto) for u in raw_urls]
 
@@ -344,12 +347,18 @@ def _load_url_code_mapping():
 
 def _apply_protocol(url, protocol):
     """
-    If protocol=='https', rewrite the EOS root URL to HTTPS;
+    if protocol=='https', rewrite the EOS root URL to HTTPS;
     if protocol=='root', return the URL unchanged.
+    if protocol=='eos', return direct eos paths
     """
     if protocol == 'https':
         return url.replace(
             'root://eospublic.cern.ch',
             'https://opendata.cern.ch'
+        )
+    elif protocol == 'eos':
+        return url.replace(
+            'root://eospublic.cern.ch/',
+            ''
         )
     return url
