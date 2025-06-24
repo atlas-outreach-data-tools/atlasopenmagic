@@ -1,66 +1,72 @@
+"""
+ATLAS Open Data Magic Client
+
+This script provides a user-friendly Python client to interact with the ATLAS Open Magic REST API.
+It simplifies the process of fetching metadata and file URLs for various datasets and releases
+from the ATLAS Open Data project.
+
+Key Features:
+- Simple functions to set the active data release (e.g., '2024r-pp').
+- Efficient local caching of metadata to minimize API calls.
+- Helper functions to retrieve specific dataset information, including file URLs for different
+  "skims" (filtered versions of datasets).
+- Support for multiple URL protocols (root, https, eos).
+- Configuration via environment variables for easy integration into different workflows.
+
+Typical Usage:
+    import atlasopenmagic as atom
+
+    # Set the desired release
+    atom.set_release('2024r-pp')
+
+    # Get metadata for a specific dataset
+    metadata = atom.get_metadata('410470')
+
+    # Get the file URLs for the 'exactly4lep' skim of that dataset
+    urls = atom.get_urls('410470', skim='exactly4lep')
+    print(urls)
+"""
+
 import os
-import re
 import threading
-import csv
 import requests
 import warnings
 from pprint import pprint
-from atlasopenmagic.data.id_matches import id_matches, id_matches_8TeV, id_matches_13TeV2020, id_matches_13TeVbeta
-from atlasopenmagic.data.urls_mc import url_mapping
-from atlasopenmagic.data.urls_data import url_mapping_data
 
-# Allow the default release to be overridden by an environment variable
+# --- Global Configuration & State ---
+
+# The active release can be set via the 'ATLAS_RELEASE' environment variable.
+# Defaults to '2024r-pp' if the variable is not set.
 current_release = os.environ.get('ATLAS_RELEASE', '2024r-pp')
 
-# Global variables. Default release is set to 2024 pp open data for research
-current_release = '2024r-pp' 
-_metadata = None
+# The API endpoint can be set via the 'ATLAS_API_BASE_URL' environment variable.
+# This allows pointing the client to different API instances (e.g., development, production).
+API_BASE_URL = os.environ.get('ATLAS_API_BASE_URL', 'https://atlasopenmagic-rest-api-atlas-open-data.app.cern.ch')
+
+# The local cache to store metadata fetched from the API for the current release.
+# This dictionary is populated on the first call to get_metadata() for a new release.
+_metadata = {}
+
+# A thread lock to ensure that the cache is accessed and modified safely in multi-threaded environments.
 _metadata_lock = threading.Lock()
-_url_code_mapping = None
-_mapping_lock = threading.Lock()
 
-# Define releases
-# Keys should be: year + e or r (education/research) + tag (for education the center of mass energy, for research the type of data)
-LIBRARY_RELEASES = {
-    '2016e-8tev': 'https://opendata.atlas.cern/files/metadata_8tev.csv',
-    '2020e-13tev': 'https://opendata.atlas.cern/files/metadata_2020e_13tev.csv',
-    '2024r-pp': 'https://opendata.atlas.cern/files/metadata.csv',
-    '2025e-13tev-beta': 'https://opendata.atlas.cern/files/metadata.csv'
-}
-
-# Description of releases so that users don't have to guess
+# A user-friendly dictionary describing the available data releases.
 RELEASES_DESC = {
-    '2016e-8tev': '2016 Open Data for education release of 8 TeV proton-proton collisions (https://opendata.cern/record/3860).',
+    '2016e-8tev': '2016 Open Data for education release of 8 TeV proton-proton collisions (https://opendata.cern.ch/record/3860).',
     '2020e-13tev': '2020 Open Data for education release of 13 TeV proton-proton collisions (https://cern.ch/2r7xt).',
-    '2024r-pp': '2024 Open Data for research release for proton-proton collisions (https://opendata.cern/record/80020).',
+    '2024r-pp': '2024 Open Data for research release for proton-proton collisions (https://opendata.cern.record/80020).',
+    '2024r-hi': '2024 Open Data for research release for heavy-ion collisions (https://opendata.cern.ch/record/80035).',
     '2025e-13tev-beta': '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions (https://opendata.cern.ch/record/93910).',
+    '2025r-evgen': '2025 Open Data for research release for event generation (https://opendata.cern.ch/record/160000).',
 }
 
-# Mapping of releases to their id match dictionaries
-ID_MATCH_LOOKUP = {
-    '2024r-pp': id_matches,
-    '2016e-8tev': id_matches_8TeV,
-    '2020e-13tev': id_matches_13TeV2020,
-    '2025e-13tev-beta': id_matches_13TeVbeta
-}
-
-# Define naming convention for datasets for different releases
-REGEX_PATTERNS = {
-    "2024r-pp": r'DAOD_PHYSLITE\.(\d+)\.', # Capture the () from DAOD_PHYSLITE.(digits).
-    "2016e-8tev": r'mc_(\d+)\.', # Capture the () from mc_(digits)
-    "2020e-13tev": r'mc_(\d+).*?\.([^.]+)\.root$', # Capture the () from mc_(digits) and the skim from the text between the last dot and ".root"
-    "2025e-13tev-beta": r'mc_(\d+).*?\.([^.]+)\.root$' # Capture the () from mc_(digits) and the skim from the text between the last dot and ".root"
-}
-
-RELEASE_HAS_SKIMS = [ '2020e-13tev' , '2025e-13tev-beta' ]
-
-# The columns of the metadata file are not great, let's use nicer ones for coding (we should probably change the metadata insted?)
-# ALL keys must be lowercase!
+# Mapping for old, deprecated field names to the new names used in the API.
+# This provides backward compatibility for users accustomed to the old naming convention.
 COLUMN_MAPPING = {
     'dataset_id': 'dataset_number',
     'short_name': 'physics_short',
-    'e-tag': 'e-tag',
-    'cross_section': 'crossSection_pb',
+    'e-tag': 'e_tag',
+    'cross_section': 'cross_section_pb',
     'filter_efficiency': 'genFiltEff',
     'k_factor': 'kFactor',
     'number_events': 'nEvents',
@@ -73,277 +79,243 @@ COLUMN_MAPPING = {
     'job_link': 'job_path',
 }
 
-# Set the metadata URL based on the current release
-_METADATA_URL = LIBRARY_RELEASES[current_release]
+# --- Internal Helper Functions ---
 
-# Little helper function to check protocols
 def check_proto(proto):
+    """
+    Validate that the protocol is one of the supported types.
+    """
     if proto not in ('root', 'https', 'eos'):
         raise ValueError(f"Invalid protocol '{proto}'. Must be 'root', 'https', or 'eos'.")
 
-# People need to be able to get information about the releases
+
+def _fetch_and_cache_release_data(release_name):
+    """
+    Internal helper to fetch all datasets for a release and populate the local cache.
+    This function performs a single, efficient API call to `/releases/{release_name}`
+    to minimize network latency.
+
+    Args:
+        release_name (str): The name of the release to fetch.
+
+    Raises:
+        ValueError: If the API call fails or returns an error.
+    """
+    global _metadata
+    print(f"Fetching and caching all metadata for release: {release_name}...")
+    try:
+        # Call the API endpoint that returns the full release details, including all datasets.
+        response = requests.get(f"{API_BASE_URL}/releases/{release_name}")
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        release_data = response.json()
+
+        # Create a new cache dictionary. This allows for an atomic update of the global cache.
+        new_cache = {}
+        # Iterate through the datasets returned by the API.
+        for dataset in release_data.get('datasets', []):
+            # Cache the dataset by its unique number (as a string).
+            ds_number_str = str(dataset['dataset_number'])
+            new_cache[ds_number_str] = dataset
+            # Also cache by the physics short name, if available, for user convenience.
+            if dataset.get('physics_short'):
+                new_cache[dataset['physics_short']] = dataset
+        
+        # Atomically replace the global cache with the newly populated one.
+        _metadata = new_cache
+        print(f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
+    except requests.exceptions.RequestException as e:
+        # Handle network errors, timeouts, etc.
+        raise ValueError(f"Failed to fetch metadata for release '{release_name}' from API: {e}")
+
+# --- Public API Functions ---
+
+def set_api_base_url(api_base_url):
+    """
+    Configures the base URL for the REST API.
+
+    This is useful for pointing the client to a development or staging API instance.
+    Changing the URL will automatically clear the local cache.
+
+    Args:
+        api_base_url (str): The new base URL for the API (e.g., 'http://localhost:8000').
+
+    Raises:
+        ValueError: If the provided URL is not a valid HTTP/HTTPS URL.
+    """
+    global API_BASE_URL
+    if not api_base_url.startswith(('http://', 'https://')):
+        raise ValueError("API base URL must start with 'http://' or 'https://'.")
+    API_BASE_URL = api_base_url
+    # Re-fetch data from the new URL on the next metadata request.
+    set_release(current_release)
+
 def available_releases():
     """
-    Returns a list of valid release keys that can be set, and their description.
+    Displays a list of all available data releases and their descriptions,
+    with clean, aligned formatting.
+    
+    This function prints directly to the console for easy inspection.
     """
-    pprint(RELEASES_DESC)
+    # Find the length of the longest release name to calculate padding.
+    max_len = max(len(k) for k in RELEASES_DESC.keys())
+
+    print("Available releases:")
+    print("========================================")
+    # Use ljust() to pad each release name to the max length for perfect alignment.
+    for release, desc in RELEASES_DESC.items():
+        print(f"{release.ljust(max_len)}  {desc}")
 
 def get_current_release():
     """
-    Returns the currently set release.
+    Returns the name of the currently active data release.
+
+    Returns:
+        str: The name of the current release (e.g., '2024r-pp').
     """
     return current_release
 
 def set_release(release):
     """
-    Set the release year and adjust the metadata source URL and cached data.
+    Sets the active data release for all subsequent API calls.
+
+    Changing the release will clear the local metadata cache, forcing a re-fetch
+    of data from the API upon the next request.
+
+    Args:
+        release (str): The name of the release to set as active.
+
+    Raises:
+        ValueError: If the provided release name is not valid.
     """
-    # Global variables that will be used within this function
-    global _METADATA_URL, _metadata, _url_code_mapping, current_release
-
-    # Get locks to ensure thread-safe modifications of global variables
-    with _metadata_lock, _mapping_lock:
-
-        # Update the current release to the provided one
+    global current_release, _metadata
+    if release not in RELEASES_DESC:
+        raise ValueError(f"Invalid release: '{release}'. Use one of: {', '.join(RELEASES_DESC.keys())}")
+    
+    with _metadata_lock:
         current_release = release
-
-        _metadata = None  # Clear cached metadata
-        _url_code_mapping = None  # Clear cached URL mapping
-
-        # Get metadata URL for the newly set release
-        _METADATA_URL = LIBRARY_RELEASES.get(release)
-
-        # If the retrieved URL is None, the provided release is invalid
-        if _METADATA_URL is None:
-            raise ValueError(f"Invalid release year: {release}. Use one of: {', '.join(LIBRARY_RELEASES.keys())}")
+        print(f"Metadata before: {_metadata}")  # Debug: Show the cache
+        _metadata = {}  # Invalidate and clear the cache
+        print(f"Metadata after: {_metadata}")  # Debug: Show the cleared cache
+        print(f"Active release set to: {current_release}. Metadata cache cleared.")
 
 def get_metadata(key, var=None):
     """
-    Retrieve metadata for a given sample key (dataset number or physics short).
+    Retrieves metadata for a given dataset, identified by its number or physics short name.
+
+    If the cache is empty for the current release, this function will trigger a fetch
+    from the API to populate it.
+
+    Args:
+        key (str or int): The dataset identifier (e.g., '410470' or 'ttbar_lep').
+        var (str, optional): A specific metadata field to retrieve. If None, the entire
+                             metadata dictionary is returned. Supports old and new field names.
+
+    Returns:
+        dict or any: The full metadata dictionary for the dataset, or the value of the
+                     single field if 'var' was specified.
+
+    Raises:
+        ValueError: If the dataset key or the specified variable field is not found.
     """
     global _metadata
-
-    # Check if metadata is already loaded
-    if _metadata is None:
-        _load_metadata()
-
-    # Try to get the metadata for the given key
-    sample_data = _metadata.get(str(key).strip())
+    key_str = str(key).strip()
     
-    # If the key is not found: invalid key and show the user the set release
+    with _metadata_lock:
+        # Fetch-on-demand: If the cache is empty, populate it.
+        if not _metadata:
+            _fetch_and_cache_release_data(current_release)
+
+    # Retrieve the full dataset dictionary from the cache.
+    sample_data = _metadata.get(key_str)
     if not sample_data:
-        raise ValueError(f"Invalid key: {key}. Are you looking into the correct release? "
-                         f"You are currently using the {current_release} release.")
-    
-    # If a specific variable is requested get it using the column mapping 
-    if var:
-        column_name = COLUMN_MAPPING.get(var.lower())
-        # Return if found
-        if column_name:
-            return sample_data.get(column_name)
-        # If not found show available varibles
-        else:
-            raise ValueError(f"Invalid field name: {var}. Use one of: {', '.join(COLUMN_MAPPING.keys())}")
+        raise ValueError(f"Invalid key: '{key_str}'. No dataset found with this ID or name in release '{current_release}'.")
 
-    return {user_friendly: sample_data[actual_name] for user_friendly, actual_name in COLUMN_MAPPING.items()}
+    # If no specific variable is requested, return the whole dictionary.
+    if not var:
+        return sample_data
+    
+    # If a specific variable is requested, try to find it.
+    # 1. Check for a direct match with the new API field names.
+    if var in sample_data:
+        return sample_data.get(var)
+    
+    # 2. If not found, check the backward compatibility mapping for old field names.
+    column_name = COLUMN_MAPPING.get(var.lower())
+    if column_name and column_name in sample_data:
+        return sample_data.get(column_name)
+    
+    # 3. If still not found, raise a helpful error listing available fields.
+    available_fields = list(sample_data.keys()) + list(COLUMN_MAPPING.keys())
+    raise ValueError(f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(available_fields)))}")
 
 def get_urls(key, skim='noskim', protocol='root'):
     """
-    Retrieve URLs corresponding to a given dataset key from the cached URL mapping.
-    For the releases in RELEASE_HAS_SKIMS, an optional parameter 'skim' is used:
-      - Only URLs that match the exact skim value (by default, 'noskim') are returned.
-      - If the skim value is not found, an error is raised showing the available skim options.
-    For other releases, the skim parameter is ignored and all URLs are returned.
+    Retrieves file URLs for a given dataset, with options for skims and protocols.
+
+    This function correctly interprets the structured skim data from the API.
+
+    Args:
+        key (str or int): The dataset identifier.
+        skim (str, optional): The desired skim type. Defaults to 'noskim' for the base,
+                              unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
+        protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
+                                  Defaults to 'root'.
+
+    Returns:
+        list[str]: A list of file URLs matching the criteria.
+
+    Raises:
+        ValueError: If the requested skim or protocol is not available for the dataset.
     """
-
-    # If they're asking for a skim outside of the places we have them, warn them
-    if current_release not in RELEASE_HAS_SKIMS and skim != 'noskim':
-        warnings.warn(
-            f"Skims are only availabe in the releases {RELEASE_HAS_SKIMS}; "
-            f"in release '{current_release}' all skims are ignored.",
-            UserWarning
-        )
-
-    global _url_code_mapping
-
-    # Check if the URL mapping cache has been loaded; if not, load it.
-    if _url_code_mapping is None:
-        _load_url_code_mapping()
-
-    # Retrieve the mapping lookup dictionary corresponding to the current release.
-    lookup = ID_MATCH_LOOKUP.get(current_release)
-    if lookup is None:
-        raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
-
-    # Use the lookup dictionary to get the unique dataset identifier for the provided key.
-    value = lookup.get(str(key))
-    if not value:
-        raise ValueError(f"Invalid key: {key}. Are you sure you're using the correct release ({current_release})?")
-
-    # Process based on the release type:
-    if current_release in RELEASE_HAS_SKIMS:
-        # For the releases with skims, the URL mapping is organized as a nested dictionary:
-        #   { dataset_code: { skim: [url, ...], ... } }
-        mapping = _url_code_mapping.get(value)
-        if mapping is None:
-            # Raise an error if there is no URL mapping for the determined dataset code.
-            raise ValueError(f"No URLs found for dataset id: {value}")
-        if skim not in mapping:
-            # If the requested skim does not exist, raise an error listing available skims.
-            available_skims = ', '.join(mapping.keys())
-            raise ValueError(f"No URLs found for skim: {skim}. Available skim options for this dataset are: {available_skims}.")
-        # Return only the URLs matching the requested skim.
-        raw_urls = mapping[skim]
-    else:
-        # For all other releases, simply return the list of URLs associated with the dataset code.
-        raw_urls = _url_code_mapping.get(value, [])
+    # First, get the complete metadata for the dataset.
+    dataset = get_metadata(key)
     
-    # Apply the protocol to the URLs based on the requested protocol.
-    proto = protocol.lower()
-    check_proto(proto)
+    # Now, build a dictionary of all available file lists from the structured API response.
+    available_files = {}
+    
+    # The 'file_list' at the top level corresponds to the 'noskim' version.
+    if dataset.get('file_list'):
+        available_files['noskim'] = dataset['file_list']
+        
+    # The 'skims' list contains objects, each with their own 'skim_type' and 'file_list'.
+    for skim_obj in dataset.get('skims', []):
+        available_files[skim_obj['skim_type']] = skim_obj['file_list']
 
-    return [_apply_protocol(u, proto) for u in raw_urls]
+    # Check if the user-requested skim exists in our constructed dictionary.
+    if skim not in available_files:
+        available_skims = ', '.join(sorted(available_files.keys()))
+        raise ValueError(f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
+    
+    # Retrieve the correct list of URLs and apply the requested protocol transformation.
+    raw_urls = available_files[skim]
+    return [_apply_protocol(u, protocol.lower()) for u in raw_urls]
 
 def available_data():
     """
-    Returns a list of available data keys for the current release from the url_mapping_data.
+    Returns a sorted list of all available dataset numbers for the current release.
+
+    Returns:
+        list[str]: A sorted list of dataset numbers as strings.
     """
-    current_data_mapping = url_mapping_data.get(current_release)
-    # If the current release is not found in the url_mapping_data, raise an error
-    if current_data_mapping is None:
-        raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
-    return list(current_data_mapping.keys())
+    with _metadata_lock:
+        # Ensure the cache is populated before reading from it.
+        if not _metadata:
+            _fetch_and_cache_release_data(current_release)
+    
+    # The cache contains keys for both dataset numbers and physics short names.
+    # We filter to return only the numeric dataset IDs.
+    return sorted([k for k in _metadata.keys() if k.isdigit()])
+
+# --- Deprecated Functions (for backward compatibility) ---
 
 def get_urls_data(key, protocol='root'):
     """
-    Retrieve data URLs corresponding to a given data key from the url_mapping_data
-    for the currently selected release.
-    """
-    # Check if the key is valid for the current release
-    current_data_mapping = url_mapping_data.get(current_release)
-    if current_data_mapping is None:
-        raise ValueError(f"Current release '{current_release}' not found in url_mapping_data.")
-
-     # Branch on release to decide whether `key` is a skim or a data_key
-    if current_release in RELEASE_HAS_SKIMS:
-        skim = key
-        available = ', '.join(current_data_mapping.keys())
-        raw_urls = current_data_mapping.get(skim)
-        if raw_urls is None:
-            raise ValueError(f"Invalid skim '{skim}'. Available skims: {available}.")
-    else:
-        data_key = key
-        available = ', '.join(current_data_mapping.keys())
-        raw_urls = current_data_mapping.get(data_key)
-        if raw_urls is None:
-            raise ValueError(f"Invalid data key '{data_key}'. Available data keys: {available}.")
+    DEPRECATED: Retrieves file URLs for the base (unskimmed) dataset.
     
-    # If the key is not found, raise an error
-    if raw_urls is None:
-        available_keys = ', '.join(current_data_mapping.keys())
-        raise ValueError(f"Invalid data key: {key}. Available keys for release '{current_release}' are: {available_keys}.")
-    
-    proto = protocol.lower()
-    check_proto(proto)
-
-    return [_apply_protocol(u, proto) for u in raw_urls]
-
-#### Internal Helper Functions ####
-
-def _load_metadata():
+    Please use get_urls(key, skim='noskim', protocol=protocol) instead.
     """
-    Load metadata from the CSV file or URL and cache it.
-    """
-    global _metadata
-    # Check if metadata is already loaded and avoid reloading
-    if _metadata is not None:
-        return
-
-    # Double-checked locking
-    with _metadata_lock:
-        if _metadata is not None:
-            return  
-
-        # Load metadata from the URL
-        _metadata = {}
-        response = requests.get(_METADATA_URL)
-        # Raise an error if the request was unsuccessful
-        response.raise_for_status()
-        # Split the response text into lines
-        lines = response.text.splitlines()
-
-        # Read the CSV data using DictReader
-        reader = csv.DictReader(lines)
-        for row in reader:
-            # Strip whitespace and fill the _metadata dictionary
-            dataset_number = row['dataset_number'].strip()
-            physics_short = row['physics_short'].strip()
-            _metadata[dataset_number] = row
-            # We can use the physics short name to get the metadata as well
-            _metadata[physics_short] = row
-
-def _load_url_code_mapping():
-    """
-    Load URLs from the url_mapping dictionary and build a mapping from dataset codes to URLs
-    for the currently selected release. For the releases in RELEASE_HAS_SKIMS, the function uses
-    a unified regex to extract both the dataset id (from the "mc_<digits>" part) and the skim 
-    tag (the text between the last dot and ".root") from the URLs.
-    """
-    global _url_code_mapping
-
-    # Avoid reloading the URL mapping if it is already built
-    if _url_code_mapping is not None:
-        return
-
-    # Acquire a lock to ensure thread-safe modifications of the URL mapping cache
-    with _mapping_lock:
-        # Check again to be sure that the URL mapping hasn't been loaded in a concurrent thread
-        if _url_code_mapping is not None:
-            return  
-
-        # Retrieve the list of URLs for the current release from the global url_mapping dictionary.
-        urls = url_mapping.get(current_release)
-        if urls is None:
-            raise ValueError(f"Unsupported release: {current_release}. Check the available releases with `available_releases()`.")
-
-        # Initialize the URL code mapping cache
-        _url_code_mapping = {}
-
-        # For '2024r-pp' and '2016e-8tev', use the existing regex-based extraction logic.
-        if current_release in ('2024r-pp', '2016e-8tev'):
-            regex_pattern = REGEX_PATTERNS.get(current_release)
-            regex = re.compile(regex_pattern)
-            # Process each URL: strip whitespace, apply the regex, and populate the mapping with the extracted dataset id.
-            for url in urls:
-                url = url.strip()
-                match = regex.search(url)
-                if match:
-                    code = match.group(1)
-                    _url_code_mapping.setdefault(code, []).append(url)
-
-        # For the releases with skims, use a unified regex that focuses on the DID
-        # and extracts the skim tag.
-        elif current_release in RELEASE_HAS_SKIMS:
-            # The regex should be defined in REGEX_PATTERNS under the key for the release
-            # and is expected to capture two groups: 
-            #   1. dataset id from "mc_<digits>"
-            #   2. skim tag from the last dot before ".root"
-            regex_pattern = REGEX_PATTERNS.get(current_release)
-            regex = re.compile(regex_pattern)
-            # Iterate over each URL, clean it, and attempt to extract dataset id and skim.
-            for url in urls:
-                url = url.strip()
-                match = regex.search(url)
-                if match:
-                    code = match.group(1)             # Extract dataset id from the first group.
-                    skim_extracted = match.group(2)     # Extract skim tag from the second group.
-                    # Build a nested mapping: dataset id -> { skim: [url, ...] }
-                    if code not in _url_code_mapping:
-                        _url_code_mapping[code] = {}
-                    _url_code_mapping[code].setdefault(skim_extracted, []).append(url)
-        else:
-            # Raise an error if the current release is not recognized.
-            raise ValueError(f"Unsupported release: {current_release}.")
+    warnings.warn("get_urls_data() is deprecated. Please use get_urls() instead.", DeprecationWarning, stacklevel=2)
+    return get_urls(key, skim='noskim', protocol=protocol)
 
 def _apply_protocol(url, protocol):
     """
