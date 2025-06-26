@@ -60,24 +60,31 @@ RELEASES_DESC = {
     '2025r-evgen': '2025 Open Data for research release for event generation (https://opendata.cern.ch/record/160000).',
 }
 
-# Mapping for old, deprecated field names to the new names used in the API.
-# This provides backward compatibility for users accustomed to the old naming convention.
-COLUMN_MAPPING = {
-    'dataset_id': 'dataset_number',
-    'short_name': 'physics_short',
-    'e-tag': 'e_tag',
-    'cross_section': 'cross_section_pb',
-    'filter_efficiency': 'genFiltEff',
-    'k_factor': 'kFactor',
-    'number_events': 'nEvents',
-    'sum_weights': 'sumOfWeights',
-    'sum_weights_squared': 'sumOfWeightsSquared',
-    'process': 'process',
-    'generators': 'generator',
-    'keywords': 'keywords',
-    'description': 'description',
-    'job_link': 'job_path',
-}
+AVAILABLE_FIELDS = [
+  "dataset_number",
+  "physics_short",
+  "e_tag",
+  "cross_section_pb",
+  "genFiltEff",
+  "kFactor",
+  "nEvents",
+  "sumOfWeights",
+  "sumOfWeightsSquared",
+  "process",
+  "generator",
+  "keywords",
+  "file_list",
+  "description",
+  "job_path",
+  "CoMEnergy",
+  "GenEvents",
+  "GenTune",
+  "PDF",
+  "Release",
+  "Filters",
+  "release.name",
+  "skims"
+]
 
 # --- Internal Helper Functions ---
 
@@ -209,9 +216,7 @@ def set_release(release):
     
     with _metadata_lock:
         current_release = release
-        print(f"Metadata before: {_metadata}")  # Debug: Show the cache
         _metadata = {}  # Invalidate and clear the cache
-        print(f"Metadata after: {_metadata}")  # Debug: Show the cleared cache
         print(f"Active release set to: {current_release}. Metadata cache cleared.")
 
 def get_metadata(key, var=None):
@@ -255,14 +260,8 @@ def get_metadata(key, var=None):
     if var in sample_data:
         return sample_data.get(var)
     
-    # 2. If not found, check the backward compatibility mapping for old field names.
-    column_name = COLUMN_MAPPING.get(var.lower())
-    if column_name and column_name in sample_data:
-        return sample_data.get(column_name)
-    
-    # 3. If still not found, raise a helpful error listing available fields.
-    available_fields = list(sample_data.keys()) + list(COLUMN_MAPPING.keys())
-    raise ValueError(f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(available_fields)))}")
+
+    raise ValueError(f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}")
 
 def get_urls(key, skim='noskim', protocol='root'):
     """
