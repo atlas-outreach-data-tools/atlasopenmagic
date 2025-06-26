@@ -31,6 +31,7 @@ import os
 import threading
 import warnings
 import requests
+from requests.exceptions import HTTPError
 
 # --- Global Configuration & State ---
 
@@ -169,7 +170,7 @@ def _fetch_and_cache_release_data(release_name):
             # Also cache by the physics short name, if available, for user
             # convenience.
             if dataset.get('physics_short'):
-                new_cache[dataset['physics_short']] = dataset
+                new_cache[dataset['physics_short'].lower()] = dataset
 
         # Atomically replace the global cache with the newly populated one.
         _metadata = new_cache
@@ -181,29 +182,6 @@ def _fetch_and_cache_release_data(release_name):
             f"Failed to fetch metadata for release '{release_name}' from API: {e}") from e
 
 # --- Public API Functions ---
-
-# # Commenting this out as it is not currently used. To be decided if we want to keep it.
-# def set_api_base_url(api_base_url):
-#     """
-#     Configures the base URL for the REST API.
-
-#     This is useful for pointing the client to a development or staging API instance.
-#     Changing the URL will automatically clear the local cache.
-
-#     Args:
-# api_base_url (str): The new base URL for the API (e.g.,
-# 'http://localhost:8000').
-
-#     Raises:
-#         ValueError: If the provided URL is not a valid HTTP/HTTPS URL.
-#     """
-#     global API_BASE_URL
-#     if not api_base_url.startswith(('http://', 'https://')):
-#         raise ValueError("API base URL must start with 'http://' or 'https://'.")
-#     API_BASE_URL = api_base_url
-#     # Re-fetch data from the new URL on the next metadata request.
-#     set_release(current_release)
-
 
 def available_releases():
     """
@@ -258,7 +236,7 @@ def set_release(release):
             f"Active release set to: {current_release}. Metadata cache cleared.")
 
 
-def get_metadata(key, var=None):
+def get_metadata(key, var=None, cache=True):
     """
     Retrieves metadata for a given dataset, identified by its number or physics short name.
 
@@ -278,15 +256,29 @@ def get_metadata(key, var=None):
         ValueError: If the dataset key or the specified variable field is not found.
     """
     global _metadata
-    key_str = str(key).strip()
+    key_str = str(key).strip().lower()  # Normalize the key to a string for consistency
 
     with _metadata_lock:
         # Fetch-on-demand: If the cache is empty, populate it.
-        if not _metadata:
+        if not _metadata and cache:
             _fetch_and_cache_release_data(current_release)
 
-    # Retrieve the full dataset dictionary from the cache.
-    sample_data = _metadata.get(key_str)
+    if not cache:
+        try:
+            response = requests.get(f"{API_BASE_URL}/metadata/{current_release}/{key_str}", timeout=300)
+            response.raise_for_status()
+            sample_data = response.json()
+        except HTTPError:
+            # Only show the custom message, no warning or traceback from HTTPError
+            raise ValueError(
+                f"Could not retrieve dataset '{key_str}' from the API.\n"
+                "Note: Only DSIDs (dataset numbers) are valid for direct (no-cache) queries.\n"
+                "If you want to use physics short names or aliases, enable caching."
+            )
+    else:
+        # Retrieve the full dataset dictionary from the cache.
+        sample_data = _metadata.get(key_str)
+
     if not sample_data:
         raise ValueError(
             f"Invalid key: '{key_str}'. \
@@ -381,4 +373,4 @@ def get_urls_data(key, protocol='root'):
         "get_urls_data() is deprecated. Please use get_urls() instead.",
         DeprecationWarning,
         stacklevel=2)
-    return get_urls(key, skim='noskim', protocol=protocol)
+    return get_urls("data", skim=key, protocol=protocol)
