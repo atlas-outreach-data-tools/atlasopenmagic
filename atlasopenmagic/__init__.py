@@ -1,3 +1,7 @@
+"""
+This module initializes the atlasopenmagic package, providing access to its functionalities.
+"""
+
 from .metadata import (
     get_metadata,
     set_release,

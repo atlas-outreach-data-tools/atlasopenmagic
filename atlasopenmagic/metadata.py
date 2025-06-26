@@ -29,9 +29,8 @@ Typical Usage:
 
 import os
 import threading
-import requests
 import warnings
-from pprint import pprint
+import requests
 
 # --- Global Configuration & State ---
 
@@ -40,58 +39,82 @@ from pprint import pprint
 current_release = os.environ.get('ATLAS_RELEASE', '2024r-pp')
 
 # The API endpoint can be set via the 'ATLAS_API_BASE_URL' environment variable.
-# This allows pointing the client to different API instances (e.g., development, production).
-API_BASE_URL = os.environ.get('ATLAS_API_BASE_URL', 'https://atlasopenmagic-rest-api-atlas-open-data.app.cern.ch')
+# This allows pointing the client to different API instances (e.g.,
+# development, production).
+API_BASE_URL = os.environ.get(
+    'ATLAS_API_BASE_URL',
+    'https://atlasopenmagic-rest-api-atlas-open-data.app.cern.ch')
 
 # The local cache to store metadata fetched from the API for the current release.
-# This dictionary is populated on the first call to get_metadata() for a new release.
+# This dictionary is populated on the first call to get_metadata() for a
+# new release.
 _metadata = {}
 
-# A thread lock to ensure that the cache is accessed and modified safely in multi-threaded environments.
+# A thread lock to ensure that the cache is accessed and modified safely
+# in multi-threaded environments.
 _metadata_lock = threading.Lock()
 
 # A user-friendly dictionary describing the available data releases.
 RELEASES_DESC = {
-    '2016e-8tev': '2016 Open Data for education release of 8 TeV proton-proton collisions (https://opendata.cern.ch/record/3860).',
-    '2020e-13tev': '2020 Open Data for education release of 13 TeV proton-proton collisions (https://cern.ch/2r7xt).',
-    '2024r-pp': '2024 Open Data for research release for proton-proton collisions (https://opendata.cern.record/80020).',
-    '2024r-hi': '2024 Open Data for research release for heavy-ion collisions (https://opendata.cern.ch/record/80035).',
-    '2025e-13tev-beta': '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions (https://opendata.cern.ch/record/93910).',
-    '2025r-evgen': '2025 Open Data for research release for event generation (https://opendata.cern.ch/record/160000).',
+    '2016e-8tev': (
+        '2016 Open Data for education release of 8 TeV proton-proton collisions '
+        '(https://opendata.cern.ch/record/3860).'
+    ),
+    '2020e-13tev': (
+        '2020 Open Data for education release of 13 TeV proton-proton collisions '
+        '(https://cern.ch/2r7xt).'
+    ),
+    '2024r-pp': (
+        '2024 Open Data for research release for proton-proton collisions '
+        '(https://opendata.cern.record/80020).'
+    ),
+    '2024r-hi': (
+        '2024 Open Data for research release for heavy-ion collisions '
+        '(https://opendata.cern.ch/record/80035).'
+    ),
+    '2025e-13tev-beta': (
+        '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions '
+        '(https://opendata.cern.ch/record/93910).'
+    ),
+    '2025r-evgen': (
+        '2025 Open Data for research release for event generation '
+        '(https://opendata.cern.ch/record/160000).'
+    ),
 }
 
 AVAILABLE_FIELDS = [
-  "dataset_number",
-  "physics_short",
-  "e_tag",
-  "cross_section_pb",
-  "genFiltEff",
-  "kFactor",
-  "nEvents",
-  "sumOfWeights",
-  "sumOfWeightsSquared",
-  "process",
-  "generator",
-  "keywords",
-  "file_list",
-  "description",
-  "job_path",
-  "CoMEnergy",
-  "GenEvents",
-  "GenTune",
-  "PDF",
-  "Release",
-  "Filters",
-  "release.name",
-  "skims"
+    "dataset_number",
+    "physics_short",
+    "e_tag",
+    "cross_section_pb",
+    "genFiltEff",
+    "kFactor",
+    "nEvents",
+    "sumOfWeights",
+    "sumOfWeightsSquared",
+    "process",
+    "generator",
+    "keywords",
+    "file_list",
+    "description",
+    "job_path",
+    "CoMEnergy",
+    "GenEvents",
+    "GenTune",
+    "PDF",
+    "Release",
+    "Filters",
+    "release.name",
+    "skims"
 ]
 
 # --- Internal Helper Functions ---
 
+
 def _apply_protocol(url, protocol):
     """
     Internal helper to transform a root URL into the specified protocol format.
-    
+
     Args:
         url (str): The base 'root://' URL.
         protocol (str): The target protocol ('https', 'eos', or 'root').
@@ -101,15 +124,18 @@ def _apply_protocol(url, protocol):
     """
     if protocol == 'https':
         # Convert to a web-accessible URL via opendata.cern.ch
-        return url.replace('root://eospublic.cern.ch:1094/', 'https://opendata.cern.ch')
-    elif protocol == 'eos':
+        return url.replace(
+            'root://eospublic.cern.ch:1094/',
+            'https://opendata.cern.ch')
+    if protocol == 'eos':
         # Provide the path relative to the EOS mount point
         return url.replace('root://eospublic.cern.ch:1094/', '')
-    elif protocol == 'root':
+    if protocol == 'root':
         # Return the original URL for direct ROOT access
         return url
-    else:
-        raise ValueError(f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
+    raise ValueError(
+        f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
+
 
 def _fetch_and_cache_release_data(release_name):
     """
@@ -126,28 +152,33 @@ def _fetch_and_cache_release_data(release_name):
     global _metadata
     print(f"Fetching and caching all metadata for release: {release_name}...")
     try:
-        # Call the API endpoint that returns the full release details, including all datasets.
-        response = requests.get(f"{API_BASE_URL}/releases/{release_name}")
+        # Call the API endpoint that returns the full release details,
+        # including all datasets.
+        response = requests.get(f"{API_BASE_URL}/releases/{release_name}", timeout=300)
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
         release_data = response.json()
 
-        # Create a new cache dictionary. This allows for an atomic update of the global cache.
+        # Create a new cache dictionary. This allows for an atomic update of
+        # the global cache.
         new_cache = {}
         # Iterate through the datasets returned by the API.
         for dataset in release_data.get('datasets', []):
             # Cache the dataset by its unique number (as a string).
             ds_number_str = str(dataset['dataset_number'])
             new_cache[ds_number_str] = dataset
-            # Also cache by the physics short name, if available, for user convenience.
+            # Also cache by the physics short name, if available, for user
+            # convenience.
             if dataset.get('physics_short'):
                 new_cache[dataset['physics_short']] = dataset
-        
+
         # Atomically replace the global cache with the newly populated one.
         _metadata = new_cache
-        print(f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
+        print(
+            f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
     except requests.exceptions.RequestException as e:
         # Handle network errors, timeouts, etc.
-        raise ValueError(f"Failed to fetch metadata for release '{release_name}' from API: {e}")
+        raise ValueError(
+            f"Failed to fetch metadata for release '{release_name}' from API: {e}") from e
 
 # --- Public API Functions ---
 
@@ -160,7 +191,8 @@ def _fetch_and_cache_release_data(release_name):
 #     Changing the URL will automatically clear the local cache.
 
 #     Args:
-#         api_base_url (str): The new base URL for the API (e.g., 'http://localhost:8000').
+# api_base_url (str): The new base URL for the API (e.g.,
+# 'http://localhost:8000').
 
 #     Raises:
 #         ValueError: If the provided URL is not a valid HTTP/HTTPS URL.
@@ -172,11 +204,12 @@ def _fetch_and_cache_release_data(release_name):
 #     # Re-fetch data from the new URL on the next metadata request.
 #     set_release(current_release)
 
+
 def available_releases():
     """
     Displays a list of all available data releases and their descriptions,
     with clean, aligned formatting.
-    
+
     This function prints directly to the console for easy inspection.
     """
     # Find the length of the longest release name to calculate padding.
@@ -184,9 +217,11 @@ def available_releases():
 
     print("Available releases:")
     print("========================================")
-    # Use ljust() to pad each release name to the max length for perfect alignment.
+    # Use ljust() to pad each release name to the max length for perfect
+    # alignment.
     for release, desc in RELEASES_DESC.items():
         print(f"{release.ljust(max_len)}  {desc}")
+
 
 def get_current_release():
     """
@@ -196,6 +231,7 @@ def get_current_release():
         str: The name of the current release (e.g., '2024r-pp').
     """
     return current_release
+
 
 def set_release(release):
     """
@@ -212,12 +248,15 @@ def set_release(release):
     """
     global current_release, _metadata
     if release not in RELEASES_DESC:
-        raise ValueError(f"Invalid release: '{release}'. Use one of: {', '.join(RELEASES_DESC.keys())}")
-    
+        raise ValueError(
+            f"Invalid release: '{release}'. Use one of: {', '.join(RELEASES_DESC.keys())}")
+
     with _metadata_lock:
         current_release = release
         _metadata = {}  # Invalidate and clear the cache
-        print(f"Active release set to: {current_release}. Metadata cache cleared.")
+        print(
+            f"Active release set to: {current_release}. Metadata cache cleared.")
+
 
 def get_metadata(key, var=None):
     """
@@ -240,7 +279,7 @@ def get_metadata(key, var=None):
     """
     global _metadata
     key_str = str(key).strip()
-    
+
     with _metadata_lock:
         # Fetch-on-demand: If the cache is empty, populate it.
         if not _metadata:
@@ -249,19 +288,22 @@ def get_metadata(key, var=None):
     # Retrieve the full dataset dictionary from the cache.
     sample_data = _metadata.get(key_str)
     if not sample_data:
-        raise ValueError(f"Invalid key: '{key_str}'. No dataset found with this ID or name in release '{current_release}'.")
+        raise ValueError(
+            f"Invalid key: '{key_str}'. \
+            No dataset found with this ID or name in release '{current_release}'.")
 
     # If no specific variable is requested, return the whole dictionary.
     if not var:
         return sample_data
-    
+
     # If a specific variable is requested, try to find it.
     # 1. Check for a direct match with the new API field names.
     if var in sample_data:
         return sample_data.get(var)
-    
 
-    raise ValueError(f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}")
+    raise ValueError(
+        f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}")
+
 
 def get_urls(key, skim='noskim', protocol='root'):
     """
@@ -284,26 +326,31 @@ def get_urls(key, skim='noskim', protocol='root'):
     """
     # First, get the complete metadata for the dataset.
     dataset = get_metadata(key)
-    
-    # Now, build a dictionary of all available file lists from the structured API response.
+
+    # Now, build a dictionary of all available file lists from the structured
+    # API response.
     available_files = {}
-    
+
     # The 'file_list' at the top level corresponds to the 'noskim' version.
     if dataset.get('file_list'):
         available_files['noskim'] = dataset['file_list']
-        
-    # The 'skims' list contains objects, each with their own 'skim_type' and 'file_list'.
+
+    # The 'skims' list contains objects, each with their own 'skim_type' and
+    # 'file_list'.
     for skim_obj in dataset.get('skims', []):
         available_files[skim_obj['skim_type']] = skim_obj['file_list']
 
     # Check if the user-requested skim exists in our constructed dictionary.
     if skim not in available_files:
         available_skims = ', '.join(sorted(available_files.keys()))
-        raise ValueError(f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
-    
-    # Retrieve the correct list of URLs and apply the requested protocol transformation.
+        raise ValueError(
+            f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
+
+    # Retrieve the correct list of URLs and apply the requested protocol
+    # transformation.
     raw_urls = available_files[skim]
     return [_apply_protocol(u, protocol.lower()) for u in raw_urls]
+
 
 def available_data():
     """
@@ -316,18 +363,22 @@ def available_data():
         # Ensure the cache is populated before reading from it.
         if not _metadata:
             _fetch_and_cache_release_data(current_release)
-    
+
     # The cache contains keys for both dataset numbers and physics short names.
     # We filter to return only the numeric dataset IDs.
     return sorted([k for k in _metadata.keys() if k.isdigit()])
 
 # --- Deprecated Functions (for backward compatibility) ---
 
+
 def get_urls_data(key, protocol='root'):
     """
     DEPRECATED: Retrieves file URLs for the base (unskimmed) dataset.
-    
+
     Please use get_urls(key, skim='noskim', protocol=protocol) instead.
     """
-    warnings.warn("get_urls_data() is deprecated. Please use get_urls() instead.", DeprecationWarning, stacklevel=2)
+    warnings.warn(
+        "get_urls_data() is deprecated. Please use get_urls() instead.",
+        DeprecationWarning,
+        stacklevel=2)
     return get_urls(key, skim='noskim', protocol=protocol)
