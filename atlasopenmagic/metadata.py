@@ -81,13 +81,28 @@ COLUMN_MAPPING = {
 
 # --- Internal Helper Functions ---
 
-def check_proto(proto):
+def _apply_protocol(url, protocol):
     """
-    Validate that the protocol is one of the supported types.
-    """
-    if proto not in ('root', 'https', 'eos'):
-        raise ValueError(f"Invalid protocol '{proto}'. Must be 'root', 'https', or 'eos'.")
+    Internal helper to transform a root URL into the specified protocol format.
+    
+    Args:
+        url (str): The base 'root://' URL.
+        protocol (str): The target protocol ('https', 'eos', or 'root').
 
+    Returns:
+        str: The transformed URL.
+    """
+    if protocol == 'https':
+        # Convert to a web-accessible URL via opendata.cern.ch
+        return url.replace('root://eospublic.cern.ch:1094/', 'https://opendata.cern.ch')
+    elif protocol == 'eos':
+        # Provide the path relative to the EOS mount point
+        return url.replace('root://eospublic.cern.ch:1094/', '')
+    elif protocol == 'root':
+        # Return the original URL for direct ROOT access
+        return url
+    else:
+        raise ValueError(f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
 def _fetch_and_cache_release_data(release_name):
     """
@@ -316,21 +331,3 @@ def get_urls_data(key, protocol='root'):
     """
     warnings.warn("get_urls_data() is deprecated. Please use get_urls() instead.", DeprecationWarning, stacklevel=2)
     return get_urls(key, skim='noskim', protocol=protocol)
-
-def _apply_protocol(url, protocol):
-    """
-    if protocol=='https', rewrite the EOS root URL to HTTPS;
-    if protocol=='root', return the URL unchanged.
-    if protocol=='eos', return direct eos paths
-    """
-    if protocol == 'https':
-        return url.replace(
-            'root://eospublic.cern.ch',
-            'https://opendata.cern.ch'
-        )
-    elif protocol == 'eos':
-        return url.replace(
-            'root://eospublic.cern.ch/',
-            ''
-        )
-    return url
