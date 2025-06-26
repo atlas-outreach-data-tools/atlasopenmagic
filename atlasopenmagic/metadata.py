@@ -144,25 +144,26 @@ def _fetch_and_cache_release_data(release_name):
 
 # --- Public API Functions ---
 
-def set_api_base_url(api_base_url):
-    """
-    Configures the base URL for the REST API.
+# # Commenting this out as it is not currently used. To be decided if we want to keep it.
+# def set_api_base_url(api_base_url):
+#     """
+#     Configures the base URL for the REST API.
 
-    This is useful for pointing the client to a development or staging API instance.
-    Changing the URL will automatically clear the local cache.
+#     This is useful for pointing the client to a development or staging API instance.
+#     Changing the URL will automatically clear the local cache.
 
-    Args:
-        api_base_url (str): The new base URL for the API (e.g., 'http://localhost:8000').
+#     Args:
+#         api_base_url (str): The new base URL for the API (e.g., 'http://localhost:8000').
 
-    Raises:
-        ValueError: If the provided URL is not a valid HTTP/HTTPS URL.
-    """
-    global API_BASE_URL
-    if not api_base_url.startswith(('http://', 'https://')):
-        raise ValueError("API base URL must start with 'http://' or 'https://'.")
-    API_BASE_URL = api_base_url
-    # Re-fetch data from the new URL on the next metadata request.
-    set_release(current_release)
+#     Raises:
+#         ValueError: If the provided URL is not a valid HTTP/HTTPS URL.
+#     """
+#     global API_BASE_URL
+#     if not api_base_url.startswith(('http://', 'https://')):
+#         raise ValueError("API base URL must start with 'http://' or 'https://'.")
+#     API_BASE_URL = api_base_url
+#     # Re-fetch data from the new URL on the next metadata request.
+#     set_release(current_release)
 
 def available_releases():
     """
