@@ -7,11 +7,15 @@ and to build datasets from sample definitions.
 import io
 import sys
 import re
+import warnings
 import subprocess
 from pathlib import Path
 import yaml
 import requests
-from atlasopenmagic.metadata import get_urls
+from atlasopenmagic.metadata import get_urls, warn_with_color
+
+warnings.showwarning = warn_with_color
+warnings.simplefilter('always', DeprecationWarning)
 
 def install_from_environment(*packages, environment_file=None):
     """
@@ -152,3 +156,23 @@ def build_dataset(samples_defs, skim='noskim', protocol='https'):
             sample['color'] = info['color']
         out[name] = sample
     return out
+
+def build_data_dataset(data_keys, name="Data", color=None, protocol="https"):
+    warnings.warn(
+        "The build_data_dataset function is deprecated. "
+        "Use build_dataset with the appropriate data definitions instead.",
+        DeprecationWarning
+    )
+    return build_dataset(
+        {name: {'dids': "data", 'color': color}},
+        skim=data_keys,
+        protocol=protocol
+    )
+
+def build_mc_dataset(mc_defs, skim='noskim', protocol='https'):
+    warnings.warn(
+        "The build_mc_dataset function is deprecated. "
+        "Use build_dataset with the appropriate MC definitions instead.",
+        DeprecationWarning
+    )
+    return build_dataset(mc_defs, skim=skim, protocol=protocol)

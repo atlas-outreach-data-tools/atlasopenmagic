@@ -33,6 +33,14 @@ import warnings
 import requests
 from requests.exceptions import HTTPError
 
+def warn_with_color(message, category, filename, lineno, file=None, line=None):
+    RED = '\033[91m'
+    RESET = '\033[0m'
+    print(f"{RED}{category.__name__}: {message} ({filename}:{lineno}){RESET}")
+
+warnings.showwarning = warn_with_color
+warnings.simplefilter('always', DeprecationWarning)
+
 # --- Global Configuration & State ---
 
 # The active release can be set via the 'ATLAS_RELEASE' environment variable.
