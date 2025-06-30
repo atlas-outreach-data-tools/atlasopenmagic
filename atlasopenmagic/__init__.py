@@ -9,7 +9,7 @@ from .metadata import (
     available_releases,
     get_current_release,
     get_urls_data,
-    available_data
+    available_datasets
 )
 
 from .utils import (
@@ -27,7 +27,7 @@ __all__ = [
     "available_releases",
     "get_current_release",
     "get_urls_data",
-    "available_data",
+    "available_datasets",
     "install_from_environment",
     "build_dataset",
     "build_mc_dataset",

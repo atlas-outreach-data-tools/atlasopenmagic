@@ -17,13 +17,13 @@ Typical Usage:
     import atlasopenmagic as atom
 
     # Set the desired release
-    atom.set_release('2024r-pp')
+    atom.set_release('2025e-13tev-beta')
 
     # Get metadata for a specific dataset
-    metadata = atom.get_metadata('410470')
+    metadata = atom.get_metadata('301204')
 
     # Get the file URLs for the 'exactly4lep' skim of that dataset
-    urls = atom.get_urls('410470', skim='exactly4lep')
+    urls = atom.get_urls('301204', skim='exactly4lep')
     print(urls)
 """
 
@@ -252,7 +252,7 @@ def get_metadata(key, var=None, cache=True):
     from the API to populate it.
 
     Args:
-        key (str or int): The dataset identifier (e.g., '410470' or 'ttbar_lep').
+        key (str or int): The dataset identifier (e.g., '301204').
         var (str, optional): A specific metadata field to retrieve. If None, the entire
                              metadata dictionary is returned. Supports old and new field names.
 
@@ -343,6 +343,10 @@ def get_urls(key, skim='noskim', protocol='root'):
     # Check if the user-requested skim exists in our constructed dictionary.
     if skim not in available_files:
         available_skims = ', '.join(sorted(available_files.keys()))
+        if available_skims == 'noskim':
+            raise ValueError(
+                f"Dataset '{key}' only has the base (unskimmed) version available.\n \
+                Are you sure that this release ({current_release}) has skimmed datasets?")
         raise ValueError(
             f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
 
@@ -352,7 +356,7 @@ def get_urls(key, skim='noskim', protocol='root'):
     return [_apply_protocol(u, protocol.lower()) for u in raw_urls]
 
 
-def available_data():
+def available_datasets():
     """
     Returns a sorted list of all available dataset numbers for the current release.
 
@@ -363,10 +367,9 @@ def available_data():
         # Ensure the cache is populated before reading from it.
         if not _metadata:
             _fetch_and_cache_release_data(current_release)
-
     # The cache contains keys for both dataset numbers and physics short names.
     # We filter to return only the numeric dataset IDs.
-    return sorted([k for k in _metadata.keys() if k.isdigit()])
+    return sorted([k for k in _metadata.keys() if k.isdigit() or k == "data"])
 
 # --- Deprecated Functions (for backward compatibility) ---
 

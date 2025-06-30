@@ -40,7 +40,7 @@ MOCK_API_RESPONSE = {
                 }
             ]
         },
-        # Adding a second dataset to make tests for `available_data` more robust.
+        # Adding a second dataset to make tests for `available_datasets` more robust.
         {
             "dataset_number": "410470",
             "physics_short": "ttbar_lep",
@@ -161,10 +161,10 @@ def test_get_urls_different_protocols():
 
 # === Tests for other utility functions ===
 
-def test_available_data():
-    """Test that available_data returns the correct, sorted list of dataset numbers."""
-    data = atom.available_data()
-    assert data == ['301204', '410470']
+def test_available_datasets():
+    """Test that available_datasets returns the correct, sorted list of dataset numbers."""
+    data = atom.available_datasets()
+    assert data == ['301204', '410470', 'data']
 
 def test_deprecated_get_urls_data():
     """Test that the deprecated get_urls_data function works and raises a warning."""
