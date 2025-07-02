@@ -96,7 +96,7 @@ The available variables are: `dataset_id`, `short_name`, `e-tag`, `cross_section
 The keys to be used for research data are the Dataset IDs found in the [Monte Carlo Metadata](https://opendata.atlas.cern/docs/data/for_research/metadata)
 
 ### `get_urls(key, skim, protocol)`
-Retrieves the list of URLs corresponding to a given key. This is used for MC data.
+Retrieves the list of URLs corresponding to a given key.
 
 Args:
 - `key`: Dataset ID.
@@ -114,7 +114,10 @@ Retrieves the list of keys for the data available for a scope/release.
 ```python
 atom.available_data()
 ```
-### `get_urls_data(data_key, protocol)`
+### ❗**DEPRECATED** `get_urls_data(data_key, protocol)`
+  
+*Please use `get_urls(key, skim='noskim', protocol=protocol)` instead.*
+
 Retrieves the list of URLs corresponding to one of the keys listed by `available_data()`.
 
 Args:
@@ -139,18 +142,20 @@ import atlasopenmagic as atom
 atom.install_from_environment("coffea", "pandas", environment_file="./myfile.yml")
 ```
 
-### `build_mc_dataset(mc_defs, skim='noskim', protocol='https')`
-Build a dict of MC samples URLs.
+### `build_dataset(samples_defs, skim='noskim', protocol='https')`
+Build a dict of data and / or MC samples URLs.
     
 Args:
-- `mc_defs`: Dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
+- `samples_defs`: Dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
 - `skim` : The MC skim tag (only meaningful in the 2025e-13tev-beta release)
 - `protocol` : Protocol to use for URLs.
 
 **Usage:**
 ```python
 import atlasopenmagic as atom
-mc_defs = {
+atom.set_release('2025e-13tev-beta')
+samples_defs = {
+    r'Data':                    {'dids': ["data"],                      'color': 'red'},
     r'Background $t\bar t$':    {'dids': [410470],                      'color': 'yellow'},
     r'Background $V+$jets':     {'dids': [700335,700336,700337],        'color': 'orange'},
     r'Background Diboson':      {'dids': [700488,700489,700490,700491],'color': 'green'},
@@ -158,23 +163,7 @@ mc_defs = {
     r'Signal ($m_H$=125 GeV)':  {'dids': [345060,346228],              'color': '#00cdff'},
 }
 
-mc_samples = build_mc_dataset(mc_defs, skim='2bjets', protocol='https')
-```
-
-### `build_data_dataset(data_keys, name="Data", color=None, protocol="https")`
-Build a dict of Data samples URLS.
-
-Args:
-- `data_keys`: The data_key(s) to fetch (e.g. '2015' or ['2015','2016']).
-- `name`: The key under which the sample appears in the returned dict.
-- `color`: A color string to attach to the sample.
-- `protocol` : Protocol to use for URLs.
-
-**Usage:**
-```python
-import atlasopenmagic as atom
-
-data_samples = build_data_samples("2bjets", name="Data", color="red", protocol="root")
+mc_samples = atom.build_dataset(samples_defs, skim='2bjets', protocol='https')
 ```
 
 ## Contributing

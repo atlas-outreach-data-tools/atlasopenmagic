@@ -1,3 +1,7 @@
+"""
+This module initializes the atlasopenmagic package, providing access to its functionalities.
+"""
+
 from .metadata import (
     get_metadata,
     set_release,
@@ -5,11 +9,12 @@ from .metadata import (
     available_releases,
     get_current_release,
     get_urls_data,
-    available_data
+    available_datasets
 )
 
 from .utils import (
     install_from_environment,
+    build_dataset,
     build_mc_dataset,
     build_data_dataset
 )
@@ -22,8 +27,9 @@ __all__ = [
     "available_releases",
     "get_current_release",
     "get_urls_data",
-    "available_data",
+    "available_datasets",
     "install_from_environment",
+    "build_dataset",
     "build_mc_dataset",
-    "build_data_dataset",
+    "build_data_dataset"
 ]
