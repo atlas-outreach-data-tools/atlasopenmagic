@@ -232,7 +232,7 @@ def set_release(release):
     Raises:
         ValueError: If the provided release name is not valid.
     """
-    global current_release, _metadata
+    global current_release, _metadata, _metadata_lock
     if release not in RELEASES_DESC:
         raise ValueError(
             f"Invalid release: '{release}'. Use one of: {', '.join(RELEASES_DESC.keys())}")
@@ -370,6 +370,70 @@ def available_datasets():
     # The cache contains keys for both dataset numbers and physics short names.
     # We filter to return only the numeric dataset IDs.
     return sorted([k for k in _metadata.keys() if k.isdigit() or k == "data"])
+
+# --- Metadata search functions
+
+def available_keywords():
+    """
+    Returns a sorted list of available keywords in use in the current release
+
+    Returns:
+        list[str]: A sorted list of keywords as strings.
+    """
+    with _metadata_lock:
+        # Ensure the cache is populated before reading from it.
+        if not _metadata:
+            _fetch_and_cache_release_data(current_release)
+    # Roll through the keywords and get the unique ones
+    keyword_list = []
+    for k in _metadata:
+        if 'keywords' in _metadata[k] and _metadata[k]['keywords'] is not None:
+            # This should be a little less memory hungry than a giant merge and then list-set-list
+            keyword_list += [ keyword for keyword in _metadata[k]['keywords'] if keyword not in keyword_list ]
+    # Return the sorted list
+    return sorted(keyword_list)
+
+
+def match_metadata(field, value, float_tolerance=0.01):
+    """
+    Returns a sorted list of datasets with metadata field matching value
+
+    Args:
+        field[str]: The metadata field to search
+        value: The value to search for
+        float_tolerance: the fractional tolerance for floating point number matches
+
+    Returns:
+        list[str]: A sorted list of matching datasets as strings
+    """
+    with _metadata_lock:
+        # Ensure the cache is populated before reading from it.
+        if not _metadata:
+            _fetch_and_cache_release_data(current_release)
+    # Go through all the datasets and look for matches
+    matches = []
+    for k in _metadata:
+        if field in _metadata[k] and _metadata[k][field] is not None:
+            # For strings allow matches of substrings and items in the lists
+            if type(_metadata[k][field]) in [str,list]:
+                if value in _metadata[k][field]:
+                    matches += [k]
+            # For numbers that aren't zero, match within tolerance
+            elif type(_metadata[k][field])==float and float(value)!=0:
+                if abs(float(value)-_metadata[k][field])/float(value)<float_tolerance:
+                    matches += [k]
+            # For other field types require an exact match
+            elif value==_metadata[k][field]:
+                matches += [k]
+        # Allow people to search for empty metadata fields
+        elif _metadata[k][field] is None and value is None:
+            matches += [k]
+
+    # Tell the users explicitly in case there are no matches
+    if len(matches)==0:
+        print('No datasets found. Check for capitalization and spelling issues in field and value in particular.')
+    return sorted(matches)
+
 
 # --- Deprecated Functions (for backward compatibility) ---
 
