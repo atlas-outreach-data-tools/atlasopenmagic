@@ -164,7 +164,7 @@ def build_data_dataset(data_keys, name="Data", color=None, protocol="https"):
         DeprecationWarning
     )
     return build_dataset(
-        {name: {'dids': "data", 'color': color}},
+        {name: {'dids': ["data"], 'color': color}},
         skim=data_keys,
         protocol=protocol
     )
