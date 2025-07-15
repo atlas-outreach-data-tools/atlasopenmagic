@@ -126,7 +126,9 @@ def _apply_protocol(url, protocol):
 
     Args:
         url (str): The base 'root://' URL.
-        protocol (str): The target protocol ('https', 'eos', or 'root').
+        protocol (str): The target protocol ('https', 'https-cache', 'eos', or 'root').
+        https-cache uses the 'simplecache' functionality of fsspec to copy input
+        files locally rather than streaming them
 
     Returns:
         str: The transformed URL.
@@ -142,6 +144,9 @@ def _apply_protocol(url, protocol):
     if protocol == 'root':
         # Return the original URL for direct ROOT access
         return url
+    if protocol == 'https-cache':
+        return url.replace('root://eospublic.cern.ch:1094/',
+                           'simplecache::https://opendata.cern.ch')
     raise ValueError(
         f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
