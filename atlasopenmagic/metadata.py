@@ -413,6 +413,10 @@ def match_metadata(field, value, float_tolerance=0.01):
     # Go through all the datasets and look for matches
     matches = []
     for k in _metadata:
+        # Keep only the pure numeric (DSID) results for clarity
+        if not k.isdigit():
+            continue
+        # Now do the searching
         if field in _metadata[k] and _metadata[k][field] is not None:
             # For strings allow matches of substrings and items in the lists
             if type(_metadata[k][field]) in [str,list]:
@@ -428,6 +432,8 @@ def match_metadata(field, value, float_tolerance=0.01):
         # Allow people to search for empty metadata fields
         elif _metadata[k][field] is None and value is None:
             matches += [k]
+    # Now, because context helps, let's make this into a list of pairs
+    matches = [ (x,_metadata[x]['physics_short']) for x in matches ]
 
     # Tell the users explicitly in case there are no matches
     if len(matches)==0:
