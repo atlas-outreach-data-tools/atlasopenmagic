@@ -350,7 +350,7 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
         ValueError: If the requested skim or protocol is not available for the dataset.
     """
     # First, get the complete metadata for the dataset.
-    dataset = get_metadata(key)
+    dataset = get_all_info(key)
 
     # Now, build a dictionary of all available file lists from the structured
     # API response.
