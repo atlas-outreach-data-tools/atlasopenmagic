@@ -325,7 +325,9 @@ def get_metadata(key, var=None, cache=True):
         ValueError: If the dataset key or the specified variable field is not found.
     """
     all_info = get_all_info(key, var, cache)
-    return { x:all_info[x] for x in all_info if x not in ['skims','file_list'] }
+    if var is None:
+        return { x:all_info[x] for x in all_info if x not in ['skims','file_list'] }
+    return all_info
 
 
 def get_urls(key, skim='noskim', protocol='root'):
