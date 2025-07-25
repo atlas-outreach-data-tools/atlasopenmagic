@@ -244,9 +244,9 @@ def set_release(release):
             f"Active release set to: {current_release}. Metadata cache cleared.")
 
 
-def get_metadata(key, var=None, cache=True):
+def get_all_info(key, var=None, cache=True):
     """
-    Retrieves metadata for a given dataset, identified by its number or physics short name.
+    Retrieves all the information for a given dataset, identified by its number or physics short name.
 
     If the cache is empty for the current release, this function will trigger a fetch
     from the API to populate it.
@@ -257,7 +257,7 @@ def get_metadata(key, var=None, cache=True):
                              metadata dictionary is returned. Supports old and new field names.
 
     Returns:
-        dict or any: The full metadata dictionary for the dataset, or the value of the
+        dict or any: The full info dictionary for the dataset, or the value of the
                      single field if 'var' was specified.
 
     Raises:
@@ -292,7 +292,7 @@ def get_metadata(key, var=None, cache=True):
             f"Invalid key: '{key_str}'. \
             No dataset found with this ID or name in release '{current_release}'.")
 
-    # If no specific variable is requested, return the whole dictionary.
+    # If no specific variable is requested, return almost the whole dictionary.
     if not var:
         return sample_data
 
@@ -303,6 +303,31 @@ def get_metadata(key, var=None, cache=True):
 
     raise ValueError(
         f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}")
+
+
+def get_metadata(key, var=None, cache=True):
+    """
+    Retrieves the metadata (no file lists) for a given dataset, identified by its number or physics short name.
+
+    If the cache is empty for the current release, this function will trigger a fetch
+    from the API to populate it.
+
+    Args:
+        key (str or int): The dataset identifier (e.g., '301204').
+        var (str, optional): A specific metadata field to retrieve. If None, the entire
+                             metadata dictionary is returned. Supports old and new field names.
+
+    Returns:
+        dict or any: The full metadata dictionary for the dataset, or the value of the
+                     single field if 'var' was specified.
+
+    Raises:
+        ValueError: If the dataset key or the specified variable field is not found.
+    """
+    all_info = get_all_info(key, var, cache)
+    if var is None:
+        return { x:all_info[x] for x in all_info if x not in ['skims','file_list'] }
+    return all_info
 
 
 def get_urls(key, skim='noskim', protocol='root'):
@@ -325,7 +350,7 @@ def get_urls(key, skim='noskim', protocol='root'):
         ValueError: If the requested skim or protocol is not available for the dataset.
     """
     # First, get the complete metadata for the dataset.
-    dataset = get_metadata(key)
+    dataset = get_all_info(key)
 
     # Now, build a dictionary of all available file lists from the structured
     # API response.
