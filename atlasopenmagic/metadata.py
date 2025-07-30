@@ -330,7 +330,7 @@ def get_metadata(key, var=None, cache=True):
     return all_info
 
 
-def get_urls(key, skim='noskim', protocol='root'):
+def get_urls(key, skim='noskim', protocol='root', cache=False):
     """
     Retrieves file URLs for a given dataset, with options for skims and protocols.
 
@@ -342,6 +342,8 @@ def get_urls(key, skim='noskim', protocol='root'):
                               unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
         protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
                                   Defaults to 'root'.
+        cache (bool, optional): use the simplecache mechanism of fsspec to locally cache
+                                files instead of streaming them
 
     Returns:
         list[str]: A list of file URLs matching the criteria.
@@ -378,7 +380,9 @@ def get_urls(key, skim='noskim', protocol='root'):
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
     raw_urls = available_files[skim]
-    return [_apply_protocol(u, protocol.lower()) for u in raw_urls]
+    # If caching is requested, add it to the paths we return
+    cache_str = 'simplecache::' if cache else ''
+    return [cache_str+_apply_protocol(u, protocol.lower()) for u in raw_urls]
 
 
 def available_datasets():
@@ -469,14 +473,14 @@ def match_metadata(field, value, float_tolerance=0.01):
 # --- Deprecated Functions (for backward compatibility) ---
 
 
-def get_urls_data(key, protocol='root'):
+def get_urls_data(key, protocol='root', cache=False):
     """
     DEPRECATED: Retrieves file URLs for the base (unskimmed) dataset.
 
-    Please use get_urls(key, skim='noskim', protocol=protocol) instead.
+    Please use get_urls(key, skim='noskim', protocol=protocol, cache=cache) instead.
     """
     warnings.warn(
         "get_urls_data() is deprecated. Please use get_urls() instead.",
         DeprecationWarning,
         stacklevel=2)
-    return get_urls("data", skim=key, protocol=protocol)
+    return get_urls("data", skim=key, protocol=protocol, cache=cache)
