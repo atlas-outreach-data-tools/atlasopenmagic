@@ -167,7 +167,7 @@ def build_dataset(samples_defs, skim='noskim', protocol='https', cache=False):
         out[name] = sample
     return out
 
-def build_data_dataset(data_keys, name="Data", color=None, protocol="https", cache=cache):
+def build_data_dataset(data_keys, name="Data", color=None, protocol="https", cache=False):
     warnings.warn(
         "The build_data_dataset function is deprecated. "
         "Use build_dataset with the appropriate data definitions instead.",
