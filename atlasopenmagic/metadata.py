@@ -126,9 +126,7 @@ def _apply_protocol(url, protocol):
 
     Args:
         url (str): The base 'root://' URL.
-        protocol (str): The target protocol ('https', 'https-cache', 'eos', or 'root').
-        https-cache uses the 'simplecache' functionality of fsspec to copy input
-        files locally rather than streaming them
+        protocol (str): The target protocol ('https', 'eos', or 'root').
 
     Returns:
         str: The transformed URL.
@@ -144,9 +142,6 @@ def _apply_protocol(url, protocol):
     if protocol == 'root':
         # Return the original URL for direct ROOT access
         return url
-    if protocol == 'https-cache':
-        return url.replace('root://eospublic.cern.ch:1094/',
-                           'simplecache::https://opendata.cern.ch')
     raise ValueError(
         f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
@@ -310,7 +305,7 @@ def get_metadata(key, var=None, cache=True):
         f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}")
 
 
-def get_urls(key, skim='noskim', protocol='root'):
+def get_urls(key, skim='noskim', protocol='root', cache=False):
     """
     Retrieves file URLs for a given dataset, with options for skims and protocols.
 
@@ -322,6 +317,8 @@ def get_urls(key, skim='noskim', protocol='root'):
                               unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
         protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
                                   Defaults to 'root'.
+        cache (bool, optional): use the simplecache mechanism of fsspec to locally cache
+                                files instead of streaming them
 
     Returns:
         list[str]: A list of file URLs matching the criteria.
@@ -379,14 +376,14 @@ def available_datasets():
 # --- Deprecated Functions (for backward compatibility) ---
 
 
-def get_urls_data(key, protocol='root'):
+def get_urls_data(key, protocol='root', cache=False):
     """
     DEPRECATED: Retrieves file URLs for the base (unskimmed) dataset.
 
-    Please use get_urls(key, skim='noskim', protocol=protocol) instead.
+    Please use get_urls(key, skim='noskim', protocol=protocol, cache=cache) instead.
     """
     warnings.warn(
         "get_urls_data() is deprecated. Please use get_urls() instead.",
         DeprecationWarning,
         stacklevel=2)
-    return get_urls("data", skim=key, protocol=protocol)
+    return get_urls("data", skim=key, protocol=protocol, cache=cache)
