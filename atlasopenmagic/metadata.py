@@ -473,7 +473,7 @@ def match_metadata(field, value, float_tolerance=0.01):
 # --- Deprecated Functions (for backward compatibility) ---
 
 
-def get_urls_data(key, protocol='root', cache=False):
+def get_urls_data(key, protocol='root'):
     """
     DEPRECATED: Retrieves file URLs for the base (unskimmed) dataset.
 
@@ -483,4 +483,4 @@ def get_urls_data(key, protocol='root', cache=False):
         "get_urls_data() is deprecated. Please use get_urls() instead.",
         DeprecationWarning,
         stacklevel=2)
-    return get_urls("data", skim=key, protocol=protocol, cache=cache)
+    return get_urls("data", skim=key, protocol=protocol)
