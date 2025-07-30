@@ -142,22 +142,32 @@ def install_from_environment(*packages, environment_file=None):
             "Make sure the package names exactly match the beginning of the package entries in the file.\n")
 
 
-def build_dataset(samples_defs, skim='noskim', protocol='https'):
+def build_dataset(samples_defs, skim='noskim', protocol='https', cache=False):
     """
     Build a dict of MC samples URLs.
+
+    Args:
+        samples_defs (dict[str,dict]: The datasets to be built up with their definitions and
+                                      colors. See examples for more info.
+        skim (str, optional): The desired skim type. Defaults to 'noskim' for the base,
+                              unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
+        protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
+                                  Defaults to 'root'.
+        cache (bool, optional): use the simplecache mechanism of fsspec to locally cache
+                                files instead of streaming them
     """
     out = {}
     for name, info in samples_defs.items():
         urls = []
         for did in info['dids']:
-            urls.extend(get_urls(str(did), skim=skim, protocol=protocol))
+            urls.extend(get_urls(str(did), skim=skim, protocol=protocol, cache=cache))
         sample = {'list': urls}
         if 'color' in info:
             sample['color'] = info['color']
         out[name] = sample
     return out
 
-def build_data_dataset(data_keys, name="Data", color=None, protocol="https"):
+def build_data_dataset(data_keys, name="Data", color=None, protocol="https", cache=False):
     warnings.warn(
         "The build_data_dataset function is deprecated. "
         "Use build_dataset with the appropriate data definitions instead.",
@@ -166,13 +176,14 @@ def build_data_dataset(data_keys, name="Data", color=None, protocol="https"):
     return build_dataset(
         {name: {'dids': ["data"], 'color': color}},
         skim=data_keys,
-        protocol=protocol
+        protocol=protocol,
+        cache=cache
     )
 
-def build_mc_dataset(mc_defs, skim='noskim', protocol='https'):
+def build_mc_dataset(mc_defs, skim='noskim', protocol='https', cache=False):
     warnings.warn(
         "The build_mc_dataset function is deprecated. "
         "Use build_dataset with the appropriate MC definitions instead.",
         DeprecationWarning
     )
-    return build_dataset(mc_defs, skim=skim, protocol=protocol)
+    return build_dataset(mc_defs, skim=skim, protocol=protocol, cache=cache)
