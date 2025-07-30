@@ -355,7 +355,9 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
     raw_urls = available_files[skim]
-    return [_apply_protocol(u, protocol.lower()) for u in raw_urls]
+    # If caching is requested, add it to the paths we return
+    cache_str = 'simplecache::' if cache else ''
+    return [cache_str+_apply_protocol(u, protocol.lower()) for u in raw_urls]
 
 
 def available_datasets():
