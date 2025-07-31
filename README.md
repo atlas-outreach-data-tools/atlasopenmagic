@@ -91,7 +91,7 @@ Or a single variable
 ```python
 xsec = atom.get_metadata('301209', 'cross_section')
 ```
-The available variables are: `dataset_id`, `short_name`, `e-tag`, `cross_section`, `filter_efficiency`, `k_factor`, `number_events`, `sum_weights`, `sum_weights_squared`, `process`, `generators`, `keywords`, `description`, `job_link`.
+The available variables are: `dataset_number`, `physics_short`, `e_tag`, `cross_section_pb`, `genFiltEff`, `kFactor`, `nEvents`, `sumOfWeights`, `sumOfWeightsSquared`, `process`, `generator`, `keywords`, `file_list`, `description`, `job_path`, `CoMEnergy`, `GenEvents`, `GenTune`, `PDF`, `Release`, `Filters`, `release`, `skims`.
 
 The keys to be used for research data are the Dataset IDs found in the [Monte Carlo Metadata](https://opendata.atlas.cern/docs/data/for_research/metadata)
 
@@ -111,7 +111,7 @@ Or a single variable
 ```python
 xsec = atom.get_metadata('301209', 'cross_section')
 ```
-The available variables are: `dataset_id`, `short_name`, `e-tag`, `cross_section`, `filter_efficiency`, `k_factor`, `number_events`, `sum_weights`, `sum_weights_squared`, `process`, `generators`, `keywords`, `description`, `job_link`.
+The available variables are: `dataset_number`, `physics_short`, `e_tag`, `cross_section_pb`, `genFiltEff`, `kFactor`, `nEvents`, `sumOfWeights`, `sumOfWeightsSquared`, `process`, `generator`, `keywords`, `description`, `job_path`, `CoMEnergy`, `GenEvents`, `GenTune`, `PDF`, `Release`, `Filters`, `release`.
 
 The keys to be used for research data are the Dataset IDs found in the [Monte Carlo Metadata](https://opendata.atlas.cern/docs/data/for_research/metadata)
 
