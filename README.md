@@ -75,12 +75,12 @@ Args:
 ```python
 atom.set_release('2024r-pp')
 ```
-### `get_metadata(key, var)`
-Get metadata information for MC data.
+### `get_all_info(key, var)`
+Retrieves all the information for a given dataset, identified by its number or physics short name.
 
 Args:
-- `key`: Dataset ID.
-- `var`: Variable to retrieve.
+- `key`: The dataset identifier (e.g., '301204').
+- `var`: A specific metadata field to retrieve. If None, the entire metadata dictionary is returned.
 
 **Usage:**
 You can get a dictionary with all the metadata
@@ -91,21 +91,42 @@ Or a single variable
 ```python
 xsec = atom.get_metadata('301209', 'cross_section')
 ```
-The available variables are: `dataset_id`, `short_name`, `e-tag`, `cross_section`, `filter_efficiency`, `k_factor`, `number_events`, `sum_weights`, `sum_weights_squared`, `process`, `generators`, `keywords`, `description`, `job_link`.
+The available variables are: `dataset_number`, `physics_short`, `e_tag`, `cross_section_pb`, `genFiltEff`, `kFactor`, `nEvents`, `sumOfWeights`, `sumOfWeightsSquared`, `process`, `generator`, `keywords`, `file_list`, `description`, `job_path`, `CoMEnergy`, `GenEvents`, `GenTune`, `PDF`, `Release`, `Filters`, `release`, `skims`.
 
 The keys to be used for research data are the Dataset IDs found in the [Monte Carlo Metadata](https://opendata.atlas.cern/docs/data/for_research/metadata)
 
-### `get_urls(key, skim, protocol)`
+### `get_metadata(key, var)`
+Retrieves the metadata (no file lists) for a given MC dataset.
+
+Args:
+- `key`: The dataset identifier (e.g., '301204').
+- `var`: A specific metadata field to retrieve. If None, the entire metadata dictionary is returned.
+
+**Usage:**
+You can get a dictionary with all the metadata
+```python
+metadata = atom.get_metadata('301209')
+```
+Or a single variable
+```python
+xsec = atom.get_metadata('301209', 'cross_section')
+```
+The available variables are: `dataset_number`, `physics_short`, `e_tag`, `cross_section_pb`, `genFiltEff`, `kFactor`, `nEvents`, `sumOfWeights`, `sumOfWeightsSquared`, `process`, `generator`, `keywords`, `description`, `job_path`, `CoMEnergy`, `GenEvents`, `GenTune`, `PDF`, `Release`, `Filters`, `release`.
+
+The keys to be used for research data are the Dataset IDs found in the [Monte Carlo Metadata](https://opendata.atlas.cern/docs/data/for_research/metadata)
+
+### `get_urls(key, skim, protocol, cache)`
 Retrieves the list of URLs corresponding to a given key.
 
 Args:
 - `key`: Dataset ID.
 - `skim`: Skim for the dataset. This parameter is only taken into account when using the `2025e-13tev-beta` release.
 - `protocol`: protocol for the URLs. Options: 'root' and 'https'.
+- `cache`: use the `simplecache` mechanism of `fsspec` to locally cache files instead of streaming them.
 
 **Usage:**
 ```python
-urls = atom.get_urls('12345', protocol='root')
+urls = atom.get_urls('12345', protocol='root', cache=True)
 ```
 ### `available_data()`
 Retrieves the list of keys for the data available for a scope/release.
@@ -116,7 +137,7 @@ atom.available_data()
 ```
 ### ❗**DEPRECATED** `get_urls_data(data_key, protocol)`
   
-*Please use `get_urls(key, skim='noskim', protocol=protocol)` instead.*
+*Please use `get_urls(key, skim='noskim', protocol=protocol, cache=False)` instead.*
 
 Retrieves the list of URLs corresponding to one of the keys listed by `available_data()`.
 
@@ -142,13 +163,14 @@ import atlasopenmagic as atom
 atom.install_from_environment("coffea", "pandas", environment_file="./myfile.yml")
 ```
 
-### `build_dataset(samples_defs, skim='noskim', protocol='https')`
+### `build_dataset(samples_defs, skim='noskim', protocol='https', cache=False)`
 Build a dict of data and / or MC samples URLs.
     
 Args:
 - `samples_defs`: Dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
 - `skim` : The MC skim tag (only meaningful in the 2025e-13tev-beta release)
 - `protocol` : Protocol to use for URLs.
+- `cache`: use the `simplecache` mechanism of `fsspec` to locally cache files instead of streaming them.
 
 **Usage:**
 ```python
@@ -163,7 +185,7 @@ samples_defs = {
     r'Signal ($m_H$=125 GeV)':  {'dids': [345060,346228],              'color': '#00cdff'},
 }
 
-mc_samples = atom.build_dataset(samples_defs, skim='2bjets', protocol='https')
+mc_samples = atom.build_dataset(samples_defs, skim='2bjets', protocol='https', cache=True)
 ```
 
 ## Contributing
