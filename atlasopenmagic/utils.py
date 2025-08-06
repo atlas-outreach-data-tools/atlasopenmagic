@@ -12,10 +12,7 @@ import subprocess
 from pathlib import Path
 import yaml
 import requests
-from atlasopenmagic.metadata import get_urls, warn_with_color
-
-warnings.showwarning = warn_with_color
-warnings.simplefilter('always', DeprecationWarning)
+from atlasopenmagic.metadata import get_urls
 
 def install_from_environment(*packages, environment_file=None):
     """
