@@ -87,6 +87,14 @@ def mock_api(monkeypatch):
 
 # === Tests for get_metadata() ===
 
+def test_set_local_release():
+    """Test setting a local release and ensuring it clears the cache."""
+    atom.set_release('2024r-pp', 'tests/mock_data')
+    assert atom.get_current_release() == '2024r-pp'
+    assert atom.get_urls("301204") == ["tests/mock_data/noskim_301204.root"]
+    # Ensure the cache is cleared
+    atom.set_release('2024r-pp')  # Reset to the original release
+
 def test_get_metadata_full():
     """Test retrieving the full metadata dictionary for a dataset by its number."""
     metadata = atom.get_metadata("301204")

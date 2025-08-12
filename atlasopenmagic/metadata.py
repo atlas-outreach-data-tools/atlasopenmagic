@@ -210,8 +210,17 @@ def get_current_release():
     """
     return current_release
 
+def _convert_to_local(url, current_local_path=None):
+    """Convert to a local file path if one is set for the current release."""
+    if not current_local_path:
+        return url   # No local mode active
+    if url.startswith(current_local_path):
+        return url   # Already local
+    # remove protocol and hostname, keep relative EOS path:
+    rel = url.split('/',)[-1]
+    return os.path.join(current_local_path, rel)
 
-def set_release(release):
+def set_release(release, local_path=None):
     """
     Sets the active data release for all subsequent API calls.
 
@@ -224,16 +233,29 @@ def set_release(release):
     Raises:
         ValueError: If the provided release name is not valid.
     """
-    global current_release, _metadata, _metadata_lock
+     
+    global current_release, _metadata, current_local_path
     if release not in RELEASES_DESC:
         raise ValueError(
-            f"Invalid release: '{release}'. Use one of: {', '.join(RELEASES_DESC.keys())}")
+            f"Invalid release '{release}'. Use one of: {', '.join(RELEASES_DESC)}"
+        )
 
     with _metadata_lock:
         current_release = release
-        _metadata = {}  # Invalidate and clear the cache
-        print(
-            f"Active release set to: {current_release}. Metadata cache cleared.")
+        _metadata = {} # Invalidate and clear the cache
+        if local_path:
+            # Check if the local path exists
+            if not os.path.isdir(local_path):
+                warnings.warn(
+                    f"Local path '{local_path}' does not exist - you may create or rsync later.",
+                    UserWarning, stacklevel=2)
+            current_local_path = local_path  # Set the local path for this release
+        else:
+            current_local_path = None  # disable local path
+
+    print(f"Active release: {current_release}. Metadata cache cleared. "
+          f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})")
+
 
 
 def get_all_info(key, var=None, cache=True):
@@ -372,9 +394,23 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
     raw_urls = available_files[skim]
+    
+    # Apply protocol transformation first
+    urls = [_apply_protocol(u, protocol.lower()) for u in raw_urls]
+    
+    # Convert to local paths if configured for the current release
+    urls = [_convert_to_local(u, current_local_path) for u in urls]
+    
     # If caching is requested, add it to the paths we return
+    # Note: Don't add cache prefix to local file paths
     cache_str = 'simplecache::' if cache else ''
-    return [cache_str+_apply_protocol(u, protocol.lower()) for u in raw_urls]
+    final_urls = []
+    for u in urls:
+        if current_local_path and not '://' in u:
+            final_urls.append(u)  # Local path: no caching prefix
+        else:
+            final_urls.append(cache_str + u)
+    return final_urls
 
 
 def available_datasets():
