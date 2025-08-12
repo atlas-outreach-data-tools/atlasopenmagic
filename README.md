@@ -66,14 +66,22 @@ release = atom.get_current_release()
 print(release)
 ```
 ### `set_release(release)`
-Set the release (scope) in which to look for information (research open data, education 8 TeV, et). The `release` passed to the function has to be one of the keys listed by `available_releases()`.
+Set the release (scope) in which to look for information (research open data, education 8 TeV, et). The `release` passed to the function has to be one of the keys listed by `available_releases()`. If a release has been downloaded locally, it is possible to use `local_path` to point `atlasopenmagic` towards the location of the datasets to use. Metadata will be still retrieved remotely.
 
 Args:
 - `release`: name of the release to use.
+- `local_path`: local directory path to use for downloaded datasets.
+            If provided, the client will assume that datasets are available locally
+            at this path.
 
-**Usage:**
+**Usage (remote storage):**
 ```python
 atom.set_release('2024r-pp')
+```
+
+**Usage (local storage):**
+```python
+atom.set_release('2024r-pp', local_path='/myproject/opendata/2024r-pp')
 ```
 ### `get_all_info(key, var)`
 Retrieves all the information for a given dataset, identified by its number or physics short name.
