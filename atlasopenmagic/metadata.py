@@ -233,7 +233,7 @@ def set_release(release, local_path=None):
     Raises:
         ValueError: If the provided release name is not valid.
     """
-     
+
     global current_release, _metadata, current_local_path
     if release not in RELEASES_DESC:
         raise ValueError(
@@ -260,19 +260,22 @@ def set_release(release, local_path=None):
 
 def get_all_info(key, var=None, cache=True):
     """
-    Retrieves all the information for a given dataset, identified by its number or physics short name.
+    Retrieves all the information for a given dataset,
+    identified by its number or physics short name.
 
-    If the cache is empty for the current release, this function will trigger a fetch
+    If the cache is empty for the current release, 
+    this function will trigger a fetch
     from the API to populate it.
 
     Args:
         key (str or int): The dataset identifier (e.g., '301204').
-        var (str, optional): A specific metadata field to retrieve. If None, the entire
-                             metadata dictionary is returned. Supports old and new field names.
+        var (str, optional): A specific metadata field to retrieve. 
+            If None, the entire metadata dictionary 
+            is returned. Supports old and new field names.
 
     Returns:
-        dict or any: The full info dictionary for the dataset, or the value of the
-                     single field if 'var' was specified.
+        dict or any: The full info dictionary for the dataset, 
+            or the value of the single field if 'var' was specified.
 
     Raises:
         ValueError: If the dataset key or the specified variable field is not found.
@@ -290,13 +293,13 @@ def get_all_info(key, var=None, cache=True):
             response = requests.get(f"{API_BASE_URL}/metadata/{current_release}/{key_str}", timeout=300)
             response.raise_for_status()
             sample_data = response.json()
-        except HTTPError:
+        except HTTPError as e:
             # Only show the custom message, no warning or traceback from HTTPError
             raise ValueError(
                 f"Could not retrieve dataset '{key_str}' from the API.\n"
                 "Note: Only DSIDs (dataset numbers) are valid for direct (no-cache) queries.\n"
                 "If you want to use physics short names or aliases, enable caching."
-            )
+            ) from e
     else:
         # Retrieve the full dataset dictionary from the cache.
         sample_data = _metadata.get(key_str)
@@ -394,10 +397,10 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
     raw_urls = available_files[skim]
-    
+
     # Apply protocol transformation first
     urls = [_apply_protocol(u, protocol.lower()) for u in raw_urls]
-    
+
     # Convert to local paths if configured for the current release
     urls = [_convert_to_local(u, current_local_path) for u in urls]
     
@@ -426,7 +429,7 @@ def available_datasets():
             _fetch_and_cache_release_data(current_release)
     # The cache contains keys for both dataset numbers and physics short names.
     # We filter to return only the numeric dataset IDs.
-    return sorted([k for k in _metadata.keys() if k.isdigit() or k == "data"])
+    return sorted([k for k in _metadata if k.isdigit() or k == "data"])
 
 # --- Metadata search functions
 
@@ -480,8 +483,8 @@ def match_metadata(field, value, float_tolerance=0.01):
                 if value in _metadata[k][field]:
                     matches += [k]
             # For numbers that aren't zero, match within tolerance
-            elif type(_metadata[k][field])==float and float(value)!=0:
-                if abs(float(value)-_metadata[k][field])/float(value)<float_tolerance:
+            elif isinstance(_metadata[k][field], float) and float(value) != 0:
+                if abs(float(value) - _metadata[k][field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
             elif value==_metadata[k][field]:

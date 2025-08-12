@@ -36,7 +36,7 @@ def install_from_environment(*packages, environment_file=None):
         if not environment_file.exists():
             raise FileNotFoundError(
                 f"Environment file not found at {environment_file}")
-        with environment_file.open('r') as file:
+        with environment_file.open('r', encoding='utf-8') as file:
             environment_data = yaml.safe_load(file)
     else:
         response = requests.get(environment_file, timeout=100)
@@ -165,6 +165,17 @@ def build_dataset(samples_defs, skim='noskim', protocol='https', cache=False):
     return out
 
 def build_data_dataset(data_keys, name="Data", color=None, protocol="https", cache=False):
+    """
+    Build a dataset for data samples.
+    This function is deprecated and will be removed in future versions.
+    Use build_dataset with the appropriate data definitions instead.
+    Args:
+        data_keys (list): List of data keys to be included in the dataset.
+        name (str, optional): Name of the dataset. Defaults to "Data".
+        color (str, optional): Color associated with the dataset. Defaults to None.
+        protocol (str, optional): Protocol for the URLs. Defaults to "https".
+        cache (bool, optional): Use caching for file access. Defaults to False.
+    """
     warnings.warn(
         "The build_data_dataset function is deprecated. "
         "Use build_dataset with the appropriate data definitions instead.",
@@ -178,6 +189,20 @@ def build_data_dataset(data_keys, name="Data", color=None, protocol="https", cac
     )
 
 def build_mc_dataset(mc_defs, skim='noskim', protocol='https', cache=False):
+    """
+    Build a dict of MC samples URLs.
+    This function is deprecated and will be removed in future versions.
+    Use build_dataset with the appropriate MC definitions instead.
+    Args:
+        mc_defs (dict): The MC datasets to be built up with their definitions and colors.
+                        See examples for more info.
+        skim (str, optional): The desired skim type. Defaults to 'noskim' for the base,
+                              unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
+        protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
+                                  Defaults to 'root'.
+        cache (bool, optional): Use the simplecache mechanism of fsspec to locally cache
+                                files instead of streaming them.
+    """
     warnings.warn(
         "The build_mc_dataset function is deprecated. "
         "Use build_dataset with the appropriate MC definitions instead.",
