@@ -415,7 +415,7 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
     if current_local_path:
         # Convert the URLs to local paths if a local path is set
         urls = [_convert_to_local(u, current_local_path) for u in urls]
-    
+
     # If caching is requested, add it to the paths we return
     # Note: Don't add cache prefix to local file paths
     cache_str = 'simplecache::' if cache else ''
@@ -458,10 +458,10 @@ def available_keywords():
             _fetch_and_cache_release_data(current_release)
     # Roll through the keywords and get the unique ones
     keyword_list = []
-    for k in _metadata:
-        if 'keywords' in _metadata[k] and _metadata[k]['keywords'] is not None:
+    for _, metadata in _metadata.items():
+        if 'keywords' in metadata and metadata['keywords'] is not None:
             # This should be a little less memory hungry than a giant merge and then list-set-list
-            keyword_list += [ keyword for keyword in _metadata[k]['keywords'] if keyword not in keyword_list ]
+            keyword_list += [keyword for keyword in metadata['keywords'] if keyword not in keyword_list]
     # Return the sorted list
     return sorted(keyword_list)
 
@@ -484,25 +484,25 @@ def match_metadata(field, value, float_tolerance=0.01):
             _fetch_and_cache_release_data(current_release)
     # Go through all the datasets and look for matches
     matches = []
-    for k in _metadata:
+    for k, metadata in _metadata.items():
         # Keep only the pure numeric (DSID) results for clarity
         if not k.isdigit():
             continue
         # Now do the searching
-        if field in _metadata[k] and _metadata[k][field] is not None:
+        if field in metadata and metadata[field] is not None:
             # For strings allow matches of substrings and items in the lists
-            if type(_metadata[k][field]) in [str,list]:
-                if value in _metadata[k][field]:
+            if isinstance(metadata[field], (str, list)):
+                if value in metadata[field]:
                     matches += [k]
             # For numbers that aren't zero, match within tolerance
-            elif isinstance(_metadata[k][field], float) and float(value) != 0:
-                if abs(float(value) - _metadata[k][field]) / float(value) < float_tolerance:
+            elif isinstance(metadata[field], float) and float(value) != 0:
+                if abs(float(value) - metadata[field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
-            elif value==_metadata[k][field]:
+            elif value == metadata[field]:
                 matches += [k]
         # Allow people to search for empty metadata fields
-        elif _metadata[k][field] is None and value is None:
+        elif metadata[field] is None and value is None:
             matches += [k]
     # Now, because context helps, let's make this into a list of pairs
     matches = [ (x,_metadata[x]['physics_short']) for x in matches ]
