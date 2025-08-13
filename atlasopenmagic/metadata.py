@@ -238,7 +238,7 @@ def set_release(release, local_path=None):
         release (str): The name of the release to set as active.
         local_path (str, optional): A local directory path to use for caching dataset files.
             If provided, the client will assume that datasets are available locally
-            at this path. If None, local caching is disabled.
+            at this path. Provide "eos" as the local_path to access using the native POSIX.
 
     Raises:
         ValueError: If the provided release name is not valid.

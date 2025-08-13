@@ -65,14 +65,16 @@ Retrieves the release that the package is currently set at.
 release = atom.get_current_release()
 print(release)
 ```
-### `set_release(release)`
-Set the release (scope) in which to look for information (research open data, education 8 TeV, et). The `release` passed to the function has to be one of the keys listed by `available_releases()`. If a release has been downloaded locally, it is possible to use `local_path` to point `atlasopenmagic` towards the location of the datasets to use. Metadata will be still retrieved remotely.
+### `set_release(release, local_path)`
+Set the release (scope) in which to look for information (research open data, education 8 TeV, et). The `release` passed to the function has to be one of the keys listed by `available_releases()`. If a release has been downloaded locally, it is possible to use `local_path` to point `atlasopenmagic` towards the location of the datasets to use. Files are expected to be in a single directory. Metadata will be still retrieved remotely.
+
+Additionally, if your facility mounts or mirrors [EOS public](https://eos-docs.web.cern.ch/diopside/) as a local filesystem, you can provide "eos" as the local_path. In this case, files will be accessed using the native POSIX path
 
 Args:
 - `release`: name of the release to use.
 - `local_path`: local directory path to use for downloaded datasets.
             If provided, the client will assume that datasets are available locally
-            at this path.
+            at this path. If `'eos'` is provided, the original folder structure for the paths is kept.
 
 **Usage (remote storage):**
 ```python
