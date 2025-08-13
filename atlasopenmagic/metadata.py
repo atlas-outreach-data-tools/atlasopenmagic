@@ -55,6 +55,9 @@ _metadata = {}
 # in multi-threaded environments.
 _metadata_lock = threading.Lock()
 
+# The local path for caching dataset files, if set.
+current_local_path = None
+
 # A user-friendly dictionary describing the available data releases.
 RELEASES_DESC = {
     '2016e-8tev': (
@@ -217,6 +220,10 @@ def _convert_to_local(url, current_local_path=None):
     if url.startswith(current_local_path):
         return url   # Already local
     # remove protocol and hostname, keep relative EOS path:
+    if current_local_path == 'eos':
+        # Special case for EOS: just return the path
+        return url.replace('root://eospublic.cern.ch:1094/', '')
+    
     rel = url.split('/',)[-1]
     return os.path.join(current_local_path, rel)
 
@@ -248,7 +255,7 @@ def set_release(release, local_path=None):
         _metadata = {} # Invalidate and clear the cache
         if local_path:
             # Check if the local path exists
-            if not os.path.isdir(local_path):
+            if not os.path.isdir(local_path) and local_path != 'eos':
                 warnings.warn(
                     f"Local path '{local_path}' does not exist - you may create or rsync later.",
                     UserWarning, stacklevel=2)
@@ -405,7 +412,9 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
     urls = [_apply_protocol(u, protocol.lower()) for u in raw_urls]
 
     # Convert to local paths if configured for the current release
-    urls = [_convert_to_local(u, current_local_path) for u in urls]
+    if current_local_path:
+        # Convert the URLs to local paths if a local path is set
+        urls = [_convert_to_local(u, current_local_path) for u in urls]
     
     # If caching is requested, add it to the paths we return
     # Note: Don't add cache prefix to local file paths
