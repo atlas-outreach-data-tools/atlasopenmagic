@@ -37,14 +37,14 @@ from requests.exceptions import HTTPError
 
 # The active release can be set via the 'ATLAS_RELEASE' environment variable.
 # Defaults to '2024r-pp' if the variable is not set.
-current_release = os.environ.get('ATLAS_RELEASE', '2024r-pp')
+current_release = os.environ.get("ATLAS_RELEASE", "2024r-pp")
 
 # The API endpoint can be set via the 'ATLAS_API_BASE_URL' environment variable.
 # This allows pointing the client to different API instances (e.g.,
 # development, production).
 API_BASE_URL = os.environ.get(
-    'ATLAS_API_BASE_URL',
-    'https://atlasopenmagic-rest-api-atlas-open-data.app.cern.ch')
+    "ATLAS_API_BASE_URL", "https://atlasopenmagic-rest-api-atlas-open-data.app.cern.ch"
+)
 
 # The local cache to store metadata fetched from the API for the current release.
 # This dictionary is populated on the first call to get_metadata() for a
@@ -60,29 +60,29 @@ current_local_path = None
 
 # A user-friendly dictionary describing the available data releases.
 RELEASES_DESC = {
-    '2016e-8tev': (
-        '2016 Open Data for education release of 8 TeV proton-proton collisions '
-        '(https://opendata.cern.ch/record/3860).'
+    "2016e-8tev": (
+        "2016 Open Data for education release of 8 TeV proton-proton collisions "
+        "(https://opendata.cern.ch/record/3860)."
     ),
-    '2020e-13tev': (
-        '2020 Open Data for education release of 13 TeV proton-proton collisions '
-        '(https://cern.ch/2r7xt).'
+    "2020e-13tev": (
+        "2020 Open Data for education release of 13 TeV proton-proton collisions "
+        "(https://cern.ch/2r7xt)."
     ),
-    '2024r-pp': (
-        '2024 Open Data for research release for proton-proton collisions '
-        '(https://opendata.cern.record/80020).'
+    "2024r-pp": (
+        "2024 Open Data for research release for proton-proton collisions "
+        "(https://opendata.cern.record/80020)."
     ),
-    '2024r-hi': (
-        '2024 Open Data for research release for heavy-ion collisions '
-        '(https://opendata.cern.ch/record/80035).'
+    "2024r-hi": (
+        "2024 Open Data for research release for heavy-ion collisions "
+        "(https://opendata.cern.ch/record/80035)."
     ),
-    '2025e-13tev-beta': (
-        '2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions '
-        '(https://opendata.cern.ch/record/93910).'
+    "2025e-13tev-beta": (
+        "2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions "
+        "(https://opendata.cern.ch/record/93910)."
     ),
-    '2025r-evgen': (
-        '2025 Open Data for research release for event generation '
-        '(https://opendata.cern.ch/record/160000).'
+    "2025r-evgen": (
+        "2025 Open Data for research release for event generation "
+        "(https://opendata.cern.ch/record/160000)."
     ),
 }
 
@@ -109,7 +109,7 @@ AVAILABLE_FIELDS = [
     "Release",
     "Filters",
     "release.name",
-    "skims"
+    "skims",
 ]
 
 # --- Internal Helper Functions ---
@@ -126,19 +126,18 @@ def _apply_protocol(url, protocol):
     Returns:
         str: The transformed URL.
     """
-    if protocol == 'https':
+    if protocol == "https":
         # Convert to a web-accessible URL via opendata.cern.ch
-        return url.replace(
-            'root://eospublic.cern.ch:1094/',
-            'https://opendata.cern.ch')
-    if protocol == 'eos':
+        return url.replace("root://eospublic.cern.ch:1094/", "https://opendata.cern.ch")
+    if protocol == "eos":
         # Provide the path relative to the EOS mount point
-        return url.replace('root://eospublic.cern.ch:1094/', '')
-    if protocol == 'root':
+        return url.replace("root://eospublic.cern.ch:1094/", "")
+    if protocol == "root":
         # Return the original URL for direct ROOT access
         return url
     raise ValueError(
-        f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
+        f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'."
+    )
 
 
 def _fetch_and_cache_release_data(release_name):
@@ -166,25 +165,27 @@ def _fetch_and_cache_release_data(release_name):
         # the global cache.
         new_cache = {}
         # Iterate through the datasets returned by the API.
-        for dataset in release_data.get('datasets', []):
+        for dataset in release_data.get("datasets", []):
             # Cache the dataset by its unique number (as a string).
-            ds_number_str = str(dataset['dataset_number'])
+            ds_number_str = str(dataset["dataset_number"])
             new_cache[ds_number_str] = dataset
             # Also cache by the physics short name, if available, for user
             # convenience.
-            if dataset.get('physics_short'):
-                new_cache[dataset['physics_short'].lower()] = dataset
+            if dataset.get("physics_short"):
+                new_cache[dataset["physics_short"].lower()] = dataset
 
         # Atomically replace the global cache with the newly populated one.
         _metadata = new_cache
-        print(
-            f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
+        print(f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
     except requests.exceptions.RequestException as e:
         # Handle network errors, timeouts, etc.
         raise ValueError(
-            f"Failed to fetch metadata for release '{release_name}' from API: {e}") from e
+            f"Failed to fetch metadata for release '{release_name}' from API: {e}"
+        ) from e
+
 
 # --- Public API Functions ---
+
 
 def available_releases():
     """
@@ -213,19 +214,23 @@ def get_current_release():
     """
     return current_release
 
+
 def _convert_to_local(url, current_local_path=None):
     """Convert to a local file path if one is set for the current release."""
     if not current_local_path:
-        return url   # No local mode active
+        return url  # No local mode active
     if url.startswith(current_local_path):
-        return url   # Already local
+        return url  # Already local
     # remove protocol and hostname, keep relative EOS path:
-    if current_local_path == 'eos':
+    if current_local_path == "eos":
         # Special case for EOS: just return the path
-        return os.path.join('/eos', url.split('eos', 1)[-1])
-    
-    rel = url.split('/',)[-1]
+        return os.path.join("/eos", url.split("eos", 1)[-1])
+
+    rel = url.split(
+        "/",
+    )[-1]
     return os.path.join(current_local_path, rel)
+
 
 def set_release(release, local_path=None):
     """
@@ -254,27 +259,31 @@ def set_release(release, local_path=None):
         current_release = release
         if local_path:
             # Check if the local path exists
-            if not os.path.isdir(local_path) and local_path != 'eos':
+            if not os.path.isdir(local_path) and local_path != "eos":
                 warnings.warn(
                     f"Local path '{local_path}' does not exist - you may create or rsync later.",
-                    UserWarning, stacklevel=2)
+                    UserWarning,
+                    stacklevel=2,
+                )
             current_local_path = local_path  # Set the local path for this release
         else:
             current_local_path = None  # disable local path
-        
-        _metadata = {} # Invalidate and clear the cache
+
+        _metadata = {}  # Invalidate and clear the cache
         _fetch_and_cache_release_data(current_release)
 
-    print(f"Active release: {current_release}. Metadata cache cleared. "
-          f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})")
+    print(
+        f"Active release: {current_release}. Metadata cache cleared. "
+        f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})"
+    )
 
 
 def find_all_files(local_path, warnmissing=False):
     """
-    Replace cached remote URLs in `_metadata` with corresponding local file paths 
+    Replace cached remote URLs in `_metadata` with corresponding local file paths
     if those files exist in the given `local_path`.
 
-    This function only affects the currently active release, and requires `_metadata` 
+    This function only affects the currently active release, and requires `_metadata`
     to be populated (it will trigger a fetch automatically).
 
     Workflow:
@@ -287,24 +296,24 @@ def find_all_files(local_path, warnmissing=False):
     3. This is done both for the main `file_list` and for each skim's `file_list`.
 
     Args:
-        local_path (str): 
-            Root directory of your local dataset copy. Can have any internal subdirectory 
+        local_path (str):
+            Root directory of your local dataset copy. Can have any internal subdirectory
             structure; only filenames are used for matching.
 
-        warnmissing (bool, optional, default=False): 
-            If True, issue a `UserWarning` for every file that is in metadata but 
+        warnmissing (bool, optional, default=False):
+            If True, issue a `UserWarning` for every file that is in metadata but
             not found locally.
 
     Notes:
         - Matching is based on filename only, not relative EOS path.
-        - If you have multiple files with the same name in different datasets, 
+        - If you have multiple files with the same name in different datasets,
           the first one found in `os.walk()` will be used for replacement.
         - This modifies `_metadata` in place for the current session.
-        - After running this, any `get_urls()` call will return local paths 
+        - After running this, any `get_urls()` call will return local paths
           where available, otherwise the original remote URLs.
     """
     # Ensure metadata is loaded for the current release
-    get_all_info('data')  
+    get_all_info("data")
 
     abs_local = os.path.abspath(local_path)
 
@@ -325,9 +334,9 @@ def find_all_files(local_path, warnmissing=False):
 
     for sample, md in filtered_metadata.items():
         # Main file_list
-        if 'file_list' in md:
+        if "file_list" in md:
             new_list = []
-            for url in md['file_list']:
+            for url in md["file_list"]:
                 fname = os.path.basename(url)
                 if fname in local_index:
                     new_list.append(local_index[fname])
@@ -337,15 +346,16 @@ def find_all_files(local_path, warnmissing=False):
                     if warnmissing:
                         warnings.warn(
                             f"File '{fname}' for dataset '{sample}' not found under '{local_path}'.",
-                            UserWarning, stacklevel=2
+                            UserWarning,
+                            stacklevel=2,
                         )
                     new_list.append(url)  # Keep remote if missing locally
-            md['file_list'] = new_list
+            md["file_list"] = new_list
 
         # Skim file_lists
-        for skim in md.get('skims', []):
+        for skim in md.get("skims", []):
             new_list = []
-            for url in skim['file_list']:
+            for url in skim["file_list"]:
                 fname = os.path.basename(url)
                 if fname in local_index:
                     new_list.append(local_index[fname])
@@ -355,15 +365,16 @@ def find_all_files(local_path, warnmissing=False):
                     if warnmissing:
                         warnings.warn(
                             f"Skim file '{fname}' for dataset '{sample}' not found under '{local_path}'.",
-                            UserWarning, stacklevel=2
+                            UserWarning,
+                            stacklevel=2,
                         )
                     new_list.append(url)
-            skim['file_list'] = new_list
+            skim["file_list"] = new_list
 
     # Summary reporting
     updated_samples = sorted(set(updated_samples))
     total_files_in_updated_samples = sum(
-        len(_metadata[sample]['file_list']) if sample in _metadata else 0
+        len(_metadata[sample]["file_list"]) if sample in _metadata else 0
         for sample in updated_samples
     )
 
@@ -379,18 +390,18 @@ def get_all_info(key, var=None, cache=True):
     Retrieves all the information for a given dataset,
     identified by its number or physics short name.
 
-    If the cache is empty for the current release, 
+    If the cache is empty for the current release,
     this function will trigger a fetch
     from the API to populate it.
 
     Args:
         key (str or int): The dataset identifier (e.g., '301204').
-        var (str, optional): A specific metadata field to retrieve. 
-            If None, the entire metadata dictionary 
+        var (str, optional): A specific metadata field to retrieve.
+            If None, the entire metadata dictionary
             is returned. Supports old and new field names.
 
     Returns:
-        dict or any: The full info dictionary for the dataset, 
+        dict or any: The full info dictionary for the dataset,
             or the value of the single field if 'var' was specified.
 
     Raises:
@@ -406,7 +417,9 @@ def get_all_info(key, var=None, cache=True):
 
     if not cache:
         try:
-            response = requests.get(f"{API_BASE_URL}/metadata/{current_release}/{key_str}", timeout=300)
+            response = requests.get(
+                f"{API_BASE_URL}/metadata/{current_release}/{key_str}", timeout=300
+            )
             response.raise_for_status()
             sample_data = response.json()
         except HTTPError as e:
@@ -423,7 +436,8 @@ def get_all_info(key, var=None, cache=True):
     if not sample_data:
         raise ValueError(
             f"Invalid key: '{key_str}'. \
-            No dataset found with this ID or name in release '{current_release}'.")
+            No dataset found with this ID or name in release '{current_release}'."
+        )
 
     # If no specific variable is requested, return almost the whole dictionary.
     if not var:
@@ -435,7 +449,8 @@ def get_all_info(key, var=None, cache=True):
         return sample_data.get(var)
 
     raise ValueError(
-        f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}")
+        f"Invalid field name: '{var}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}"
+    )
 
 
 def get_metadata(key, var=None, cache=True):
@@ -459,11 +474,11 @@ def get_metadata(key, var=None, cache=True):
     """
     all_info = get_all_info(key, var, cache)
     if var is None:
-        return { x:all_info[x] for x in all_info if x not in ['skims','file_list'] }
+        return {x: all_info[x] for x in all_info if x not in ["skims", "file_list"]}
     return all_info
 
 
-def get_urls(key, skim='noskim', protocol='root', cache=False):
+def get_urls(key, skim="noskim", protocol="root", cache=False):
     """
     Retrieves file URLs for a given dataset, with options for skims and protocols.
 
@@ -492,23 +507,25 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
     available_files = {}
 
     # The 'file_list' at the top level corresponds to the 'noskim' version.
-    if dataset.get('file_list'):
-        available_files['noskim'] = dataset['file_list']
+    if dataset.get("file_list"):
+        available_files["noskim"] = dataset["file_list"]
 
     # The 'skims' list contains objects, each with their own 'skim_type' and
     # 'file_list'.
-    for skim_obj in dataset.get('skims', []):
-        available_files[skim_obj['skim_type']] = skim_obj['file_list']
+    for skim_obj in dataset.get("skims", []):
+        available_files[skim_obj["skim_type"]] = skim_obj["file_list"]
 
     # Check if the user-requested skim exists in our constructed dictionary.
     if skim not in available_files:
-        available_skims = ', '.join(sorted(available_files.keys()))
-        if available_skims == 'noskim':
+        available_skims = ", ".join(sorted(available_files.keys()))
+        if available_skims == "noskim":
             raise ValueError(
                 f"Dataset '{key}' only has the base (unskimmed) version available.\n \
-                Are you sure that this release ({current_release}) has skimmed datasets?")
+                Are you sure that this release ({current_release}) has skimmed datasets?"
+            )
         raise ValueError(
-            f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
+            f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}"
+        )
 
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
@@ -524,10 +541,10 @@ def get_urls(key, skim='noskim', protocol='root', cache=False):
 
     # If caching is requested, add it to the paths we return
     # Note: Don't add cache prefix to local file paths
-    cache_str = 'simplecache::' if cache else ''
+    cache_str = "simplecache::" if cache else ""
     final_urls = []
     for u in urls:
-        if current_local_path and not '://' in u:
+        if current_local_path and not "://" in u:
             final_urls.append(u)  # Local path: no caching prefix
         else:
             final_urls.append(cache_str + u)
@@ -549,7 +566,9 @@ def available_datasets():
     # We filter to return only the numeric dataset IDs.
     return sorted([k for k in _metadata if k.isdigit() or k == "data"])
 
+
 # --- Metadata search functions
+
 
 def available_keywords():
     """
@@ -565,9 +584,13 @@ def available_keywords():
     # Roll through the keywords and get the unique ones
     keyword_list = []
     for _, metadata in _metadata.items():
-        if 'keywords' in metadata and metadata['keywords'] is not None:
+        if "keywords" in metadata and metadata["keywords"] is not None:
             # This should be a little less memory hungry than a giant merge and then list-set-list
-            keyword_list += [keyword for keyword in metadata['keywords'] if keyword not in keyword_list]
+            keyword_list += [
+                keyword
+                for keyword in metadata["keywords"]
+                if keyword not in keyword_list
+            ]
     # Return the sorted list
     return sorted(keyword_list)
 
@@ -611,18 +634,20 @@ def match_metadata(field, value, float_tolerance=0.01):
         elif metadata[field] is None and value is None:
             matches += [k]
     # Now, because context helps, let's make this into a list of pairs
-    matches = [ (x,_metadata[x]['physics_short']) for x in matches ]
+    matches = [(x, _metadata[x]["physics_short"]) for x in matches]
 
     # Tell the users explicitly in case there are no matches
-    if len(matches)==0:
-        print('No datasets found. Check for capitalization and spelling issues in field and value in particular.')
+    if len(matches) == 0:
+        print(
+            "No datasets found. Check for capitalization and spelling issues in field and value in particular."
+        )
     return sorted(matches)
 
 
 # --- Deprecated Functions (for backward compatibility) ---
 
 
-def get_urls_data(key, protocol='root'):
+def get_urls_data(key, protocol="root"):
     """
     DEPRECATED: Retrieves file URLs for the base (unskimmed) dataset.
 
@@ -631,5 +656,6 @@ def get_urls_data(key, protocol='root'):
     warnings.warn(
         "get_urls_data() is deprecated. Please use get_urls() instead.",
         DeprecationWarning,
-        stacklevel=2)
+        stacklevel=2,
+    )
     return get_urls("data", skim=key, protocol=protocol)
