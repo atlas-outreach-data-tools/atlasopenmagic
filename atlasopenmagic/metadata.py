@@ -222,7 +222,7 @@ def _convert_to_local(url, current_local_path=None):
     # remove protocol and hostname, keep relative EOS path:
     if current_local_path == 'eos':
         # Special case for EOS: just return the path
-        return url.replace('root://eospublic.cern.ch:1094/', '')
+        return os.path.join('/eos', url.split('eos', 1)[-1])
     
     rel = url.split('/',)[-1]
     return os.path.join(current_local_path, rel)
@@ -252,7 +252,6 @@ def set_release(release, local_path=None):
 
     with _metadata_lock:
         current_release = release
-        _metadata = {} # Invalidate and clear the cache
         if local_path:
             # Check if the local path exists
             if not os.path.isdir(local_path) and local_path != 'eos':
@@ -262,10 +261,117 @@ def set_release(release, local_path=None):
             current_local_path = local_path  # Set the local path for this release
         else:
             current_local_path = None  # disable local path
+        
+        _metadata = {} # Invalidate and clear the cache
+        _fetch_and_cache_release_data(current_release)
 
     print(f"Active release: {current_release}. Metadata cache cleared. "
           f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})")
 
+
+def find_all_files(local_path, warnmissing=False):
+    """
+    Replace cached remote URLs in `_metadata` with corresponding local file paths 
+    if those files exist in the given `local_path`.
+
+    This function only affects the currently active release, and requires `_metadata` 
+    to be populated (it will trigger a fetch automatically).
+
+    Workflow:
+    ---------
+    1. Walk the given `local_path` once and build a lookup dictionary of available files.
+       The lookup is keyed only by filename (basename), so this assumes filenames are unique.
+    2. For every dataset in the current release cache:
+       - Replace each file URL with its local path if the corresponding file exists locally.
+       - For files missing locally, keep the remote URL and optionally emit a warning.
+    3. This is done both for the main `file_list` and for each skim's `file_list`.
+
+    Args:
+        local_path (str): 
+            Root directory of your local dataset copy. Can have any internal subdirectory 
+            structure; only filenames are used for matching.
+
+        warnmissing (bool, optional, default=False): 
+            If True, issue a `UserWarning` for every file that is in metadata but 
+            not found locally.
+
+    Notes:
+        - Matching is based on filename only, not relative EOS path.
+        - If you have multiple files with the same name in different datasets, 
+          the first one found in `os.walk()` will be used for replacement.
+        - This modifies `_metadata` in place for the current session.
+        - After running this, any `get_urls()` call will return local paths 
+          where available, otherwise the original remote URLs.
+    """
+    # Ensure metadata is loaded for the current release
+    get_all_info('data')  
+
+    abs_local = os.path.abspath(local_path)
+
+    # Build an index of all available local files for quick O(1) lookups
+    local_index = {}
+    for dirpath, _, filenames in os.walk(abs_local, followlinks=True):
+        for fname in filenames:
+            local_index[fname] = os.path.join(dirpath, fname)
+
+    # Track which datasets were updated and how many files were replaced
+    updated_samples = []
+    replaced_file_count = 0
+
+    # Only process main dataset entries (exclude physics_short aliases)
+    filtered_metadata = {
+        k: v for k, v in _metadata.items() if k.isdigit() or k == "data"
+    }
+
+    for sample, md in filtered_metadata.items():
+        # Main file_list
+        if 'file_list' in md:
+            new_list = []
+            for url in md['file_list']:
+                fname = os.path.basename(url)
+                if fname in local_index:
+                    new_list.append(local_index[fname])
+                    updated_samples.append(sample)
+                    replaced_file_count += 1
+                else:
+                    if warnmissing:
+                        warnings.warn(
+                            f"File '{fname}' for dataset '{sample}' not found under '{local_path}'.",
+                            UserWarning, stacklevel=2
+                        )
+                    new_list.append(url)  # Keep remote if missing locally
+            md['file_list'] = new_list
+
+        # Skim file_lists
+        for skim in md.get('skims', []):
+            new_list = []
+            for url in skim['file_list']:
+                fname = os.path.basename(url)
+                if fname in local_index:
+                    new_list.append(local_index[fname])
+                    updated_samples.append(sample)
+                    replaced_file_count += 1
+                else:
+                    if warnmissing:
+                        warnings.warn(
+                            f"Skim file '{fname}' for dataset '{sample}' not found under '{local_path}'.",
+                            UserWarning, stacklevel=2
+                        )
+                    new_list.append(url)
+            skim['file_list'] = new_list
+
+    # Summary reporting
+    updated_samples = sorted(set(updated_samples))
+    total_files_in_updated_samples = sum(
+        len(_metadata[sample]['file_list']) if sample in _metadata else 0
+        for sample in updated_samples
+    )
+
+    print(
+        f"Metadata updated with local paths for {len(updated_samples)} samples "
+        f"({updated_samples}) and {replaced_file_count} files "
+        f"(out of {total_files_in_updated_samples} in those samples)."
+    )
 
 
 def get_all_info(key, var=None, cache=True):

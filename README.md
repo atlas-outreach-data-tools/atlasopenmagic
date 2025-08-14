@@ -105,6 +105,16 @@ The available variables are: `dataset_number`, `physics_short`, `e_tag`, `cross_
 
 The keys to be used for research data are the Dataset IDs found in the [Monte Carlo Metadata](https://opendata.atlas.cern/docs/data/for_research/metadata)
 
+### `find_all_files(local_path, warnmissing=False)`
+Replace cached remote URLs in `_metadata` with corresponding local file paths if those files exist in the given `local_path`.
+
+This function only affects the currently active release, and requires `_metadata` to be populated (it will trigger a fetch automatically).
+
+Args:
+- `local_path (str)`: Root directory of your local dataset copy. Can have any internal subdirectory structure; only filenames are used for matching.
+
+- `warnmissing (bool, optional, default=False)`: If True, issue a `UserWarning` for every file that is in metadata but not found locally.
+
 ### `get_metadata(key, var)`
 Retrieves the metadata (no file lists) for a given MC dataset.
 
