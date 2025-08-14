@@ -89,7 +89,9 @@ def mock_api(monkeypatch):
 
 def test_set_local_release():
     """Test setting a local release and ensuring it clears the cache."""
-    atom.set_release('2024r-pp', 'tests/mock_data')
+    with pytest.warns(UserWarning):
+        atom.set_release('2024r-pp', 'tests/mock_data')
+
     assert atom.get_current_release() == '2024r-pp'
     assert atom.get_urls("301204") == ["tests/mock_data/noskim_301204.root"]
     # Ensure the cache is cleared
@@ -181,3 +183,28 @@ def test_deprecated_get_urls_data():
     
     # Ensure it returns the 'noskim' URLs as expected.
     assert urls == ["root://eospublic.cern.ch:1094//path/to/4lep_skim_data.root"]
+
+def test_find_all_files():
+    """
+    Test that find_all_files() replaces remote URLs with local paths
+    only when the files actually exist under the given local_path.
+    """
+    # Fake directory listing to be returned by os.walk()
+    # Format: (dirpath, dirnames, filenames)
+    fake_oswalk = [
+        ("/fake/path/mock_data", [], ["noskim_301204.root"]),
+        ("/fake/path/mock_data1", [], ["4lep_skim_data.root"]),
+    ]
+
+    # Patch os.walk so it returns our fake listing instead of scanning disk
+    with patch("atlasopenmagic.metadata.os.walk", return_value=fake_oswalk):
+        atom.find_all_files("/fake/path")
+
+    # Validate replacement logic
+    assert atom.get_urls("301204") == ["/fake/path/mock_data/noskim_301204.root"]
+    assert atom.get_urls("301204", skim="4lep") == ["root://eospublic.cern.ch:1094//path/to/4lep_skim_301204.root"]
+    assert atom.get_urls("data") == ["root://eospublic.cern.ch:1094//path/to/ttbar.root"]
+    assert atom.get_urls("data", skim="4lep") == ["/fake/path/mock_data1/4lep_skim_data.root"]
+
+    # atom.set_release('2025e-13tev-beta')  # Reset to the original release
+    atom.set_release('2024r-pp')  # Reset to the original release
