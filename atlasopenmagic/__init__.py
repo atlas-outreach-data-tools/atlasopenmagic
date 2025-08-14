@@ -12,14 +12,14 @@ from .metadata import (
     get_urls_data,
     available_datasets,
     available_keywords,
-    match_metadata
+    match_metadata,
 )
 
 from .utils import (
     install_from_environment,
     build_dataset,
     build_mc_dataset,
-    build_data_dataset
+    build_data_dataset,
 )
 
 # List of public functions available when importing the package
@@ -37,5 +37,5 @@ __all__ = [
     "install_from_environment",
     "build_dataset",
     "build_mc_dataset",
-    "build_data_dataset"
+    "build_data_dataset",
 ]
