@@ -313,7 +313,7 @@ def find_all_files(local_path, warnmissing=False):
           where available, otherwise the original remote URLs.
     """
     # Ensure metadata is loaded for the current release
-    get_all_info("data")
+    _fetch_and_cache_release_data(current_release)
 
     abs_local = os.path.abspath(local_path)
 
