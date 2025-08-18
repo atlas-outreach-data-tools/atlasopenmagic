@@ -15,7 +15,7 @@ import requests
 from atlasopenmagic.metadata import get_urls
 
 
-def install_from_environment(*packages, environment_file=None):
+def install_from_environment(*packages, environment_file=None): # pragma: no cover
     """
     Install specific packages listed in an environment.yml file via pip.
 
