@@ -1,6 +1,7 @@
 # Atlas Open Magic 🪄📊
 [![Tests](https://github.com/atlas-outreach-data-tools/atlasopenmagic/actions/workflows/test.yml/badge.svg)](https://github.com/atlas-outreach-data-tools/atlasopenmagic/actions/workflows/test.yml)
 ![Dynamic TOML Badge](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fatlas-outreach-data-tools%2Fatlasopenmagic%2Frefs%2Fheads%2Fmain%2Fpyproject.toml&query=%24.project.version&label=pypi)
+[![codecov](https://codecov.io/gh/atlas-outreach-data-tools/atlasopenmagic/graph/badge.svg?token=CNTZ8AEHIG)](https://codecov.io/gh/atlas-outreach-data-tools/atlasopenmagic)
 
 
 **Atlas Open Magic** is a Python package made to simplify working with ATLAS Open Data by providing utilities to manage metadata and URLs for streaming the data.
