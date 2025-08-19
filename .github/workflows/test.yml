@@ -40,7 +40,6 @@ jobs:
         pytest . --cov=atlasopenmagic --cov-report=xml
 
     - name: Upload results to Codecov
-      if: matrix.python-version == '3.11'
       uses: codecov/codecov-action@v5
       with:
         file: coverage.xml

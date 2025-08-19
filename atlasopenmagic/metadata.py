@@ -203,9 +203,7 @@ def available_releases():
     # alignment.
     for release, desc in RELEASES_DESC.items():
         print(f"{release.ljust(max_len)}  {desc}")
-    return "\n".join(
-        f"{release.ljust(max_len)}  {desc}" for release, desc in RELEASES_DESC.items()
-    )
+    return RELEASES_DESC
 
 
 def get_current_release():
@@ -632,11 +630,11 @@ def match_metadata(field, value, float_tolerance=0.01):
                 if abs(float(value) - metadata[field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
-            elif value == metadata[field]:
-                matches += [k]
+            elif value == metadata[field]:  # pragma no cover
+                matches += [k]              # pragma no cover
         # Allow people to search for empty metadata fields
-        else:
-            continue
+        elif (field not in metadata or metadata[field] is None) and value is None:
+            matches += [k]
     # Now, because context helps, let's make this into a list of pairs
     matches = [(x, _metadata[x]["physics_short"]) for x in matches]
 

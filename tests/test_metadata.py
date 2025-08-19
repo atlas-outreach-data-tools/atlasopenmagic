@@ -208,7 +208,7 @@ def test_available_releases():
     """Test that available_releases returns the correct list of releases."""
     releases = atom.available_releases()
     # releases should be a string
-    assert isinstance(releases, str)
+    assert isinstance(releases, dict)
     # Check that the expected release is present
     assert "2024r-pp" in releases
 
