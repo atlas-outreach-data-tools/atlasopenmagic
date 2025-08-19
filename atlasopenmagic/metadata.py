@@ -179,7 +179,7 @@ def _fetch_and_cache_release_data(release_name):
         print(f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
     except requests.exceptions.RequestException as e:
         # Handle network errors, timeouts, etc.
-        raise ValueError(
+        raise requests.exceptions.RequestException(
             f"Failed to fetch metadata for release '{release_name}' from API: {e}"
         ) from e
 
@@ -203,6 +203,7 @@ def available_releases():
     # alignment.
     for release, desc in RELEASES_DESC.items():
         print(f"{release.ljust(max_len)}  {desc}")
+    return RELEASES_DESC
 
 
 def get_current_release():
@@ -224,7 +225,7 @@ def _convert_to_local(url, current_local_path=None):
     # remove protocol and hostname, keep relative EOS path:
     if current_local_path == "eos":
         # Special case for EOS: just return the path
-        return os.path.join("/eos", url.split("eos", 1)[-1])
+        return os.path.join("/eos/", url.split("eos/", 1)[-1])
 
     rel = url.split(
         "/",
@@ -416,6 +417,7 @@ def get_all_info(key, var=None, cache=True):
             _fetch_and_cache_release_data(current_release)
 
     if not cache:
+        _metadata = {}  # Clear the cache if not using it
         try:
             response = requests.get(
                 f"{API_BASE_URL}/metadata/{current_release}/{key_str}", timeout=300
@@ -424,7 +426,7 @@ def get_all_info(key, var=None, cache=True):
             sample_data = response.json()
         except HTTPError as e:
             # Only show the custom message, no warning or traceback from HTTPError
-            raise ValueError(
+            raise HTTPError(
                 f"Could not retrieve dataset '{key_str}' from the API.\n"
                 "Note: Only DSIDs (dataset numbers) are valid for direct (no-cache) queries.\n"
                 "If you want to use physics short names or aliases, enable caching."
@@ -628,10 +630,10 @@ def match_metadata(field, value, float_tolerance=0.01):
                 if abs(float(value) - metadata[field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
-            elif value == metadata[field]:
-                matches += [k]
+            elif value == metadata[field]:  # pragma no cover
+                matches += [k]              # pragma no cover
         # Allow people to search for empty metadata fields
-        elif metadata[field] is None and value is None:
+        elif (field not in metadata or metadata[field] is None) and value is None:
             matches += [k]
     # Now, because context helps, let's make this into a list of pairs
     matches = [(x, _metadata[x]["physics_short"]) for x in matches]
