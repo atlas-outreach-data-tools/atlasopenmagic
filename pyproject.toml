@@ -29,7 +29,9 @@ Repository = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
 
 [project.optional-dependencies]
 dev = [
-    "pytest"
+    "pylint",
+    "pytest",
+    "pytest-cov"
 ]
 
 [tool.hatch.build]
