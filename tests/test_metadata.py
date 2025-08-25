@@ -384,3 +384,14 @@ def test_save_read_metadata():
     atom.read_metadata('local_metadata.json')
     # Check the new metadata
     assert my_metadata == atom.get_all_metadata()
+
+    # Test behavior when a non-standard file type is requested for metadata saving.
+    with pytest.raises(ValueError):
+        atom.save_metadata('local_metadata.csv')
+
+    # Test a bad metadata load
+    import json
+    with open('test_file.json','w') as test_json:
+        json.dump( ['list','of','things'], test_json)
+    with pytest.raises(ValueError):
+        atom.read_metadata('test_file.json')
