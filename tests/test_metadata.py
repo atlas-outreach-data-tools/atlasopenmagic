@@ -368,3 +368,19 @@ def test_find_all_files():
 
     # atom.set_release('2025e-13tev-beta')  # Reset to the original release
     atom.set_release('2024r-pp')  # Reset to the original release
+
+
+def test_save_read_metadata():
+    """
+    Test that we can save metadata to a json file and read it back, and get back what we wrote
+    """
+    # First test that we can save the metadata
+    atom.save_metadata('local_metadata.json')
+    # Write it to a text file as well - we don't test yet that we can read it back from a text file
+    atom.save_metadata('local_metadata.txt')
+    # Then test that we can get all the metadata
+    my_metadata = atom.get_all_metadata()
+    # Now test that we can load the metadata
+    atom.read_metadata('local_metadata.json')
+    # Check the new metadata
+    assert my_metadata == atom.get_all_metadata()
