@@ -378,26 +378,26 @@ def test_save_read_metadata():
     metadata.empty_metadata()
 
     # First test that we can save the metadata
-    atom.save_metadata('local_metadata.json')
+    metadata.save_metadata('local_metadata.json')
     # Write it to a text file as well - we don't test yet that we can read it back from a text file
-    atom.save_metadata('local_metadata.txt')
+    metadata.save_metadata('local_metadata.txt')
     # Then test that we can get all the metadata
-    my_metadata = atom.get_all_metadata()
+    my_metadata = metadata.get_all_metadata()
     # Now test that we can load the metadata
-    atom.read_metadata('local_metadata.json')
+    metadata.read_metadata('local_metadata.json')
     # Check the new metadata
-    assert my_metadata == atom.get_all_metadata()
+    assert my_metadata == metadata.get_all_metadata()
 
     # Test behavior when a non-standard file type is requested for metadata saving.
     with pytest.raises(ValueError):
-        atom.save_metadata('local_metadata.csv')
+        metadata.save_metadata('local_metadata.csv')
 
     # Test a bad metadata load
     import json
     with open('test_file.json','w') as test_json:
         json.dump( ['list','of','things'], test_json)
     with pytest.raises(ValueError):
-        atom.read_metadata('test_file.json')
+        metadata.read_metadata('test_file.json')
 
     # Clean up after ourselves
     import os
@@ -406,7 +406,7 @@ def test_save_read_metadata():
     os.remove('local_metadata.txt')
 
     # Ensure the cache is cleared
-    atom.set_release('2024r-pp')
+    metadata.set_release('2024r-pp')
 
 def test_get_all_metadata():
     """
@@ -416,7 +416,7 @@ def test_get_all_metadata():
     from atlasopenmagic import metadata
     metadata.empty_metadata()
     # Then test that we can get all the metadata
-    my_metadata = atom.get_all_metadata()
+    my_metadata = metadata.get_all_metadata()
 
 def test_internals():
     """
