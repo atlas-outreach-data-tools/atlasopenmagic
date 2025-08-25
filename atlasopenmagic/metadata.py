@@ -586,6 +586,9 @@ def empty_metadata():
     """
     Internal helper function to empty the metadata cache and leave it empty
     """
+    # Make sure we work with the global object
+    global _metadata
+    # Clear the cache
     with _metadata_lock:
         _metadata = {}
 
