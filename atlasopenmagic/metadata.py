@@ -33,7 +33,7 @@ import warnings
 import requests
 from requests.exceptions import HTTPError
 # Some functions (like metadata) can return any type
-from typing import Any
+from typing import Optional, Any
 
 # --- Global Configuration & State ---
 
@@ -220,7 +220,7 @@ def get_current_release() -> str:
 
 
 def _convert_to_local(url: str,
-                      current_local_path: str | None = None) -> str:
+                      current_local_path: Optional[str] = None) -> str:
     """Convert to a local file path if one is set for the current release."""
     if not current_local_path:
         return url  # No local mode active
@@ -238,7 +238,7 @@ def _convert_to_local(url: str,
 
 
 def set_release(release: str,
-                local_path: str | None = None) -> None:
+                local_path: Optional[str] = None) -> None:
     """
     Sets the active data release for all subsequent API calls.
 
@@ -393,7 +393,7 @@ def find_all_files(local_path: str,
 
 
 def get_all_info(key: str,
-                 var: str | None = None,
+                 var: Optional[str] = None,
                  cache: bool = True) -> Any:
     """
     Retrieves all the information for a given dataset,
@@ -464,7 +464,7 @@ def get_all_info(key: str,
 
 
 def get_metadata(key: str,
-                 var: str | None = None,
+                 var: Optional[str] = None,
                  cache: bool = True) -> Any:
     """
     Retrieves the metadata (no file lists) for a given dataset, identified by its number or physics short name.

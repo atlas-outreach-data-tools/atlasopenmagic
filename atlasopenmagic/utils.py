@@ -13,10 +13,11 @@ from pathlib import Path
 import yaml
 import requests
 from atlasopenmagic.metadata import get_urls
+from typing import Optional
 
 
-def install_from_environment(*packages: str | None,
-                             environment_file: str | None = None) -> None: # pragma: no cover
+def install_from_environment(*packages: Optional[str],
+                             environment_file: Optional[str] = None) -> None: # pragma: no cover
     """
     Install specific packages listed in an environment.yml file via pip.
 
@@ -175,7 +176,7 @@ def build_dataset(samples_defs: dict[str,dict],
 
 def build_data_dataset(data_keys: list[str],
                        name: str = "Data",
-                       color: str | None = None,
+                       color: Optional[str] = None,
                        protocol: str = "https",
                        cache: bool = False) -> dict[str,dict]:
     """
