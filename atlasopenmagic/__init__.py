@@ -13,6 +13,9 @@ from .metadata import (
     available_datasets,
     available_keywords,
     match_metadata,
+    save_metadata,
+    read_metadata,
+    get_all_metadata,
 )
 
 from .utils import (
@@ -34,6 +37,9 @@ __all__ = [
     "available_datasets",
     "available_keywords",
     "match_metadata",
+    "save_metadata",
+    "read_metadata",
+    "get_all_metadata",
     "install_from_environment",
     "build_dataset",
     "build_mc_dataset",

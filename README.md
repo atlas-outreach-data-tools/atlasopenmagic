@@ -156,6 +156,35 @@ Retrieves the list of keys for the data available for a scope/release.
 ```python
 atom.available_data()
 ```
+### `get_all_metadata()`
+Retrieves the current dictionary of metadata, in its entirety.
+
+**Usage:**
+```python
+my_metadata = atom.get_all_metadata()
+```
+### `save_metadata(file_name)`
+Saves the metadata to an output file. Currently supports writing to json or txt file.
+
+Args:
+- `file_name`: the name of the file to save the metadata to, with full path and extension.
+
+**Usage:**
+```python
+save_metadata('metadata.json')
+```
+### `read_metadata(file_name, release)`
+Reads the metadata from a file. Currently supports reading from json.
+
+Args:
+- `file_name`: the name of the file to load the metadata from, with full path
+- `release`: the name of the release for this metadata; default 'custom'
+
+**Usage:**
+```python
+read_metadata('metadata.json', release='2024r-pp')
+```
+
 ### ❗**DEPRECATED** `get_urls_data(data_key, protocol)`
   
 *Please use `get_urls(key, skim='noskim', protocol=protocol, cache=False)` instead.*
@@ -170,6 +199,7 @@ Args:
 ```python
 data = get_urls_data(data_key='2016', protocol='https')
 ```
+
 ## Notebooks utilities description and usage 
 ### `install_from_environment(*packages, environment_file)`
 Install specific packages listed in an `environment.yml` file via pip.

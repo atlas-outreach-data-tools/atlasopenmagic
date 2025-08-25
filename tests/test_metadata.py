@@ -139,6 +139,11 @@ def test_get_metadata_no_cache(mock_api):
 
 def test_get_metadata_full():
     """Test retrieving the full metadata dictionary for a dataset by its number."""
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+
+    # Grab the metadata for the specific dataset
     metadata = atom.get_metadata("301204")
     assert metadata is not None
     assert metadata["dataset_number"] == "301204"
@@ -261,12 +266,21 @@ def test_install_from_environment():
 
 def test_available_datasets():
     """Test that available_datasets returns the correct, sorted list of dataset numbers."""
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+
+    # Now see what datasets are available to us
     data = atom.available_datasets()
     assert data == ['301204', '410470', 'data']
 
 def test_available_keywords():
     """Test that available_keywords returns the correct list of keywords."""
-    
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+
+    # Now check our available keywords
     keywords = atom.available_keywords()
     assert isinstance(keywords, list)
     assert "2electron" in keywords
@@ -276,6 +290,9 @@ def test_available_keywords():
 
 def test_match_metadata():
     """Test that match_metadata returns the correct metadata for a given keyword."""
+    # Empty out the cache before the first call to check the caching functionality
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
 
     # Match datasets_numbers
     matched = atom.match_metadata("dataset_number", "301204")
@@ -366,5 +383,65 @@ def test_find_all_files():
     assert atom.get_urls("data") == ["root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"]
     assert atom.get_urls("data", skim="4lep") == ["/fake/path/mock_data1/4lep_skim_data.root"]
 
-    # atom.set_release('2025e-13tev-beta')  # Reset to the original release
+    # Ensure that the cache is cleared
     atom.set_release('2024r-pp')  # Reset to the original release
+
+def test_save_read_metadata():
+    """
+    Test that we can save metadata to a json file and read it back, and get back what we wrote
+    """
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+
+    # First test that we can save the metadata
+    atom.save_metadata('local_metadata.json')
+    # Write it to a text file as well - we don't test yet that we can read it back from a text file
+    atom.save_metadata('local_metadata.txt')
+    # Then test that we can get all the metadata
+    my_metadata = atom.get_all_metadata()
+    # Now test that we can load the metadata
+    atom.read_metadata('local_metadata.json')
+    # Check the new metadata
+    assert my_metadata == atom.get_all_metadata()
+
+    # Test behavior when a non-standard file type is requested for metadata saving.
+    with pytest.raises(ValueError):
+        atom.save_metadata('local_metadata.csv')
+
+    # Test a bad metadata load
+    import json
+    with open('test_file.json','w') as test_json:
+        json.dump( ['list','of','things'], test_json)
+    with pytest.raises(ValueError):
+        atom.read_metadata('test_file.json')
+
+    # Clean up after ourselves
+    import os
+    os.remove('test_file.json')
+    os.remove('local_metadata.json')
+    os.remove('local_metadata.txt')
+
+    # Ensure the cache is cleared
+    atom.set_release('2024r-pp')
+
+def test_get_all_metadata():
+    """
+    Test function to get all metadata without a warm cache
+    """
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+    # Then test that we can get all the metadata
+    my_metadata = atom.get_all_metadata()
+
+def test_internals():
+    """
+    Test internal functions from atlasopenmagic
+    """
+    from atlasopenmagic import metadata
+    test_path = "/fake/path/mock_data/noskim_301204.root"
+    # Check that if we don't give a current local path we just get our path back
+    assert metadata._convert_to_local(test_path) == "/fake/path/mock_data/noskim_301204.root"
+    # Check that if we start with our local path, we just get our path back
+    assert metadata._convert_to_local(test_path,'/fake/path') == "/fake/path/mock_data/noskim_301204.root"

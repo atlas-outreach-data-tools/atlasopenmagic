@@ -569,6 +569,30 @@ def available_datasets():
     return sorted([k for k in _metadata if k.isdigit() or k == "data"])
 
 
+def get_all_metadata():
+    """
+    Returns the entire metadata dictionary, en mass
+    Returns:
+        The metadata dictionary
+    """
+    with _metadata_lock:
+        # Ensure the cache is populated before reading from it.
+        if not _metadata:
+            _fetch_and_cache_release_data(current_release)
+    return _metadata
+
+
+def empty_metadata():
+    """
+    Internal helper function to empty the metadata cache and leave it empty
+    """
+    # Make sure we work with the global object
+    global _metadata
+    # Clear the cache
+    with _metadata_lock:
+        _metadata = {}
+
+
 # --- Metadata search functions
 
 
@@ -644,6 +668,77 @@ def match_metadata(field, value, float_tolerance=0.01):
             "No datasets found. Check for capitalization and spelling issues in field and value in particular."
         )
     return sorted(matches)
+
+
+# --- Metadata saving and loading functions ---
+
+
+def save_metadata(file_name='metadata.json'):
+    """
+    Save the metadata in an output file.
+    Attempts to adjust the output based on the file extension, currently supporting txt and json.
+    Loads the metadata if it is currently empty.
+
+    Args:
+        file_name: the name of the file to save the metadata to, with full path and extension.
+    """
+    # Check if metadata is already loaded, load it if needed
+    with _metadata_lock:
+        # Ensure the cache is populated before reading from it.
+        if not _metadata:
+            _fetch_and_cache_release_data(current_release)
+
+    # If they request json file saving, we have a very easy time
+    if file_name.endswith('.json'):
+        import json
+        with open(file_name,'w') as outfile:
+            json.dump(
+                _metadata,
+                outfile,
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=False,
+                separators=(",", ": "),
+            )
+    # If they want text files, just use pretty print
+    elif file_name.endswith('.txt'):
+        import pprint
+        with open(file_name,'w') as outfile:
+            pprint.pprint(
+                    _metadata,
+                    outfile,
+                    indent=2)
+    # No other formats supported at this time
+    else:
+        raise ValueError(f'Requested metadata saving to unsupported filetype: {file_name.split(".")[-1]}. Currently supporting txt and json.')
+
+def read_metadata(file_name='metadata.json', release='custom'):
+    """
+    Reads the metadata from an input file.
+    Overwrites existing metadata.
+
+    Args:
+        file_name: the name of the file to load the metadata from, with full path
+        release: the name of the release for this metadata; default 'custom'
+    """
+    # Grab the global _metadata object and current release so that we can adjust them
+    global _metadata, current_release
+
+    # Let the users know that we heard them
+    print(f'Loading metadata from {file_name}, and setting release to {release}')
+
+    # Lock it up so that noone else is writing to it at the moment
+    with _metadata_lock:
+        # Now load the metadata. We'll take it all, directly, just like we saved it above
+        import json
+        with open(file_name,'r') as input_metadata:
+            my_metadata = json.load(input_metadata)
+            if not isinstance(my_metadata,dict):
+                raise ValueError(f'Did not get a dictionary as expected from {file_name}. Will not load metadata.')
+            _metadata = my_metadata
+
+        # Now set the release if all went according to plan
+        current_release = release
 
 
 # --- Deprecated Functions (for backward compatibility) ---
