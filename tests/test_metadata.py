@@ -366,14 +366,16 @@ def test_find_all_files():
     assert atom.get_urls("data") == ["root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"]
     assert atom.get_urls("data", skim="4lep") == ["/fake/path/mock_data1/4lep_skim_data.root"]
 
-    # atom.set_release('2025e-13tev-beta')  # Reset to the original release
+    # Ensure that the cache is cleared
     atom.set_release('2024r-pp')  # Reset to the original release
-
 
 def test_save_read_metadata():
     """
     Test that we can save metadata to a json file and read it back, and get back what we wrote
     """
+    # Ensure the cache is cleared
+    atom.set_release('2024r-pp')
+
     # First test that we can save the metadata
     atom.save_metadata('local_metadata.json')
     # Write it to a text file as well - we don't test yet that we can read it back from a text file
@@ -409,6 +411,9 @@ def test_get_all_metadata():
     """
     Test function to get all metadata without a warm cache
     """
+    # Ensure the cache is cleared
+    atom.set_release('2024r-pp')
+
     # Then test that we can get all the metadata
     my_metadata = atom.get_all_metadata()
 
