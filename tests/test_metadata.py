@@ -395,3 +395,23 @@ def test_save_read_metadata():
         json.dump( ['list','of','things'], test_json)
     with pytest.raises(ValueError):
         atom.read_metadata('test_file.json')
+
+
+def test_get_all_metadata():
+    """
+    Test function to get all metadata without a warm cache
+    """
+    # Then test that we can get all the metadata
+    my_metadata = atom.get_all_metadata()
+
+
+def test_internals():
+    """
+    Test internal functions from atlasopenmagic
+    """
+    from atlasopenmagic import metadata
+    test_path = "/fake/path/mock_data/noskim_301204.root"
+    # Check that if we don't give a current local path we just get our path back
+    assert metadata._convert_to_local(test_path) == "/fake/path/mock_data/noskim_301204.root"
+    # Check that if we start with our local path, we just get our path back
+    assert metadata._convert_to_local(test_path,'/fake/path') == "/fake/path/mock_data/noskim_301204.root"
