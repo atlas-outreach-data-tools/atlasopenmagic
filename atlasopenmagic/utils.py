@@ -15,7 +15,8 @@ import requests
 from atlasopenmagic.metadata import get_urls
 
 
-def install_from_environment(*packages, environment_file=None): # pragma: no cover
+def install_from_environment(*packages: list[str] | None,
+                             environment_file: str | None = None) -> None: # pragma: no cover
     """
     Install specific packages listed in an environment.yml file via pip.
 
@@ -143,7 +144,10 @@ def install_from_environment(*packages, environment_file=None): # pragma: no cov
         )
 
 
-def build_dataset(samples_defs, skim="noskim", protocol="https", cache=False):
+def build_dataset(samples_defs: dict[str,dict],
+                  skim: str = "noskim",
+                  protocol: str = "https",
+                  cache=False) -> dict[str,dict]:
     """
     Build a dict of MC samples URLs.
 
@@ -169,9 +173,11 @@ def build_dataset(samples_defs, skim="noskim", protocol="https", cache=False):
     return out
 
 
-def build_data_dataset(
-    data_keys, name="Data", color=None, protocol="https", cache=False
-):
+def build_data_dataset(data_keys: list[str],
+                       name: str = "Data",
+                       color: str | None = None,
+                       protocol: str = "https",
+                       cache: bool = False) -> dict[str,dict]:
     """
     Build a dataset for data samples.
     This function is deprecated and will be removed in future versions.
@@ -196,7 +202,10 @@ def build_data_dataset(
     )
 
 
-def build_mc_dataset(mc_defs, skim="noskim", protocol="https", cache=False):
+def build_mc_dataset(mc_defs: dict[str,dict],
+                     skim: str = "noskim",
+                     protocol: str = "https",
+                     cache: bool = False) -> dict[str,dict]:
     """
     Build a dict of MC samples URLs.
     This function is deprecated and will be removed in future versions.
