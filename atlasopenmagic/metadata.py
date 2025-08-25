@@ -32,6 +32,8 @@ import threading
 import warnings
 import requests
 from requests.exceptions import HTTPError
+# Some functions (like metadata) can return any type
+from typing import Optional, Any
 
 # --- Global Configuration & State ---
 
@@ -115,7 +117,8 @@ AVAILABLE_FIELDS = [
 # --- Internal Helper Functions ---
 
 
-def _apply_protocol(url, protocol):
+def _apply_protocol(url: str,
+                    protocol: str) -> str:
     """
     Internal helper to transform a root URL into the specified protocol format.
 
@@ -140,7 +143,7 @@ def _apply_protocol(url, protocol):
     )
 
 
-def _fetch_and_cache_release_data(release_name):
+def _fetch_and_cache_release_data(release_name: str) -> str:
     """
     Internal helper to fetch all datasets for a release and populate the local cache.
     This function performs a single, efficient API call to `/releases/{release_name}`
@@ -187,7 +190,7 @@ def _fetch_and_cache_release_data(release_name):
 # --- Public API Functions ---
 
 
-def available_releases():
+def available_releases() -> dict[str,tuple[str] ]:
     """
     Displays a list of all available data releases and their descriptions,
     with clean, aligned formatting.
@@ -206,7 +209,7 @@ def available_releases():
     return RELEASES_DESC
 
 
-def get_current_release():
+def get_current_release() -> str:
     """
     Returns the name of the currently active data release.
 
@@ -216,7 +219,8 @@ def get_current_release():
     return current_release
 
 
-def _convert_to_local(url, current_local_path=None):
+def _convert_to_local(url: str,
+                      current_local_path: Optional[str] = None) -> str:
     """Convert to a local file path if one is set for the current release."""
     if not current_local_path:
         return url  # No local mode active
@@ -233,7 +237,8 @@ def _convert_to_local(url, current_local_path=None):
     return os.path.join(current_local_path, rel)
 
 
-def set_release(release, local_path=None):
+def set_release(release: str,
+                local_path: Optional[str] = None) -> None:
     """
     Sets the active data release for all subsequent API calls.
 
@@ -279,7 +284,8 @@ def set_release(release, local_path=None):
     )
 
 
-def find_all_files(local_path, warnmissing=False):
+def find_all_files(local_path: str,
+                   warnmissing: bool = False) -> None:
     """
     Replace cached remote URLs in `_metadata` with corresponding local file paths
     if those files exist in the given `local_path`.
@@ -386,7 +392,9 @@ def find_all_files(local_path, warnmissing=False):
     )
 
 
-def get_all_info(key, var=None, cache=True):
+def get_all_info(key: str,
+                 var: Optional[str] = None,
+                 cache: bool = True) -> Any:
     """
     Retrieves all the information for a given dataset,
     identified by its number or physics short name.
@@ -455,7 +463,9 @@ def get_all_info(key, var=None, cache=True):
     )
 
 
-def get_metadata(key, var=None, cache=True):
+def get_metadata(key: str,
+                 var: Optional[str] = None,
+                 cache: bool = True) -> Any:
     """
     Retrieves the metadata (no file lists) for a given dataset, identified by its number or physics short name.
 
@@ -480,7 +490,10 @@ def get_metadata(key, var=None, cache=True):
     return all_info
 
 
-def get_urls(key, skim="noskim", protocol="root", cache=False):
+def get_urls(key: str,
+             skim: str = "noskim",
+             protocol: str = "root",
+             cache: bool = False) -> list[str]:
     """
     Retrieves file URLs for a given dataset, with options for skims and protocols.
 
@@ -553,7 +566,7 @@ def get_urls(key, skim="noskim", protocol="root", cache=False):
     return final_urls
 
 
-def available_datasets():
+def available_datasets() -> list[str]:
     """
     Returns a sorted list of all available dataset numbers for the current release.
 
@@ -569,7 +582,7 @@ def available_datasets():
     return sorted([k for k in _metadata if k.isdigit() or k == "data"])
 
 
-def get_all_metadata():
+def get_all_metadata() -> dict[str,dict]:
     """
     Returns the entire metadata dictionary, en mass
     Returns:
@@ -582,7 +595,7 @@ def get_all_metadata():
     return _metadata
 
 
-def empty_metadata():
+def empty_metadata() -> None:
     """
     Internal helper function to empty the metadata cache and leave it empty
     """
@@ -596,7 +609,7 @@ def empty_metadata():
 # --- Metadata search functions
 
 
-def available_keywords():
+def available_keywords() -> list[str]:
     """
     Returns a sorted list of available keywords in use in the current release
 
@@ -621,7 +634,9 @@ def available_keywords():
     return sorted(keyword_list)
 
 
-def match_metadata(field, value, float_tolerance=0.01):
+def match_metadata(field: str,
+                   value: Any,
+                   float_tolerance: float = 0.01) -> list[tuple[str,str]]:
     """
     Returns a sorted list of datasets with metadata field matching value
 
@@ -654,8 +669,8 @@ def match_metadata(field, value, float_tolerance=0.01):
                 if abs(float(value) - metadata[field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
-            elif value == metadata[field]:  # pragma no cover
-                matches += [k]              # pragma no cover
+            elif value == metadata[field]:
+                matches += [k]
         # Allow people to search for empty metadata fields
         elif (field not in metadata or metadata[field] is None) and value is None:
             matches += [k]
@@ -673,7 +688,7 @@ def match_metadata(field, value, float_tolerance=0.01):
 # --- Metadata saving and loading functions ---
 
 
-def save_metadata(file_name='metadata.json'):
+def save_metadata(file_name: str = 'metadata.json') -> None:
     """
     Save the metadata in an output file.
     Attempts to adjust the output based on the file extension, currently supporting txt and json.
@@ -712,7 +727,8 @@ def save_metadata(file_name='metadata.json'):
     else:
         raise ValueError(f'Requested metadata saving to unsupported filetype: {file_name.split(".")[-1]}. Currently supporting txt and json.')
 
-def read_metadata(file_name='metadata.json', release='custom'):
+def read_metadata(file_name: str = 'metadata.json',
+                  release: str = 'custom') -> None:
     """
     Reads the metadata from an input file.
     Overwrites existing metadata.
@@ -744,7 +760,8 @@ def read_metadata(file_name='metadata.json', release='custom'):
 # --- Deprecated Functions (for backward compatibility) ---
 
 
-def get_urls_data(key, protocol="root"):
+def get_urls_data(key: str,
+                  protocol: str = "root") -> list[str]:
     """
     DEPRECATED: Retrieves file URLs for the base (unskimmed) dataset.
 

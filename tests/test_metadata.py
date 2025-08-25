@@ -445,3 +445,21 @@ def test_internals():
     assert metadata._convert_to_local(test_path) == "/fake/path/mock_data/noskim_301204.root"
     # Check that if we start with our local path, we just get our path back
     assert metadata._convert_to_local(test_path,'/fake/path') == "/fake/path/mock_data/noskim_301204.root"
+
+def test_other_metadata_field_type():
+    """
+    When loading custom metadata, it is possible that someone has a field that's a type we don't treat.
+    This checks what happens in that case.
+    """
+    # Write ourselves a little test file with differently-valued metadata
+    import json
+    with open('test_file.json','w') as test_json:
+        json.dump( {'123456':{'test':{'content':'value'},'physics_short':'test_sample'}}, test_json)
+    atom.read_metadata('test_file.json')
+    # Cleanliness is important!
+    import os
+    os.remove('test_file.json')
+    # Now try to get the metadata based on the keyword
+    assert atom.match_metadata('test', {'content':'value'}) == [('123456', 'test_sample')]
+    # Now try to get metadata for a field we don't use
+    assert atom.match_metadata('not_a_field',None) == [('123456', 'test_sample')]
