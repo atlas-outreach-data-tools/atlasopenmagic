@@ -220,5 +220,14 @@ Contributions are welcome! To contribute:
 
 Please ensure all tests pass before submitting a pull request (just run `pytest` from the main directory of the package).
 
+Developers can also `pip install` including additional tools required for testing:
+```bash
+pip install atlasopenmagic[dev]
+```
+or with a local copy of the repository:
+```bash
+pip install .[dev]
+```
+
 ## License
 This project is licensed under the [Apache 2.0 License](https://github.com/atlas-outreach-data-tools/atlasopenmagic/blob/main/LICENSE)
