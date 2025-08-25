@@ -373,8 +373,9 @@ def test_save_read_metadata():
     """
     Test that we can save metadata to a json file and read it back, and get back what we wrote
     """
-    # Ensure the cache is cleared
-    atom.set_release('2024r-pp')
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
 
     # First test that we can save the metadata
     atom.save_metadata('local_metadata.json')
@@ -411,14 +412,11 @@ def test_get_all_metadata():
     """
     Test function to get all metadata without a warm cache
     """
-    # Ensure the cache is cleared
-    atom.set_release('2024r-pp')
-
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
     # Then test that we can get all the metadata
     my_metadata = atom.get_all_metadata()
-
-    # Ensure the cache is cleared
-    atom.set_release('2024r-pp')
 
 def test_internals():
     """
@@ -430,6 +428,3 @@ def test_internals():
     assert metadata._convert_to_local(test_path) == "/fake/path/mock_data/noskim_301204.root"
     # Check that if we start with our local path, we just get our path back
     assert metadata._convert_to_local(test_path,'/fake/path') == "/fake/path/mock_data/noskim_301204.root"
-
-    # Ensure the cache is cleared
-    atom.set_release('2024r-pp')

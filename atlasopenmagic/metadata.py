@@ -582,6 +582,14 @@ def get_all_metadata():
     return _metadata
 
 
+def empty_metadata():
+    """
+    Internal helper function to empty the metadata cache and leave it empty
+    """
+    with _metadata_lock:
+        _metadata = {}
+
+
 # --- Metadata search functions
 
 
