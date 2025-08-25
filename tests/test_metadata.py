@@ -139,6 +139,11 @@ def test_get_metadata_no_cache(mock_api):
 
 def test_get_metadata_full():
     """Test retrieving the full metadata dictionary for a dataset by its number."""
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+
+    # Grab the metadata for the specific dataset
     metadata = atom.get_metadata("301204")
     assert metadata is not None
     assert metadata["dataset_number"] == "301204"
@@ -261,12 +266,21 @@ def test_install_from_environment():
 
 def test_available_datasets():
     """Test that available_datasets returns the correct, sorted list of dataset numbers."""
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+
+    # Now see what datasets are available to us
     data = atom.available_datasets()
     assert data == ['301204', '410470', 'data']
 
 def test_available_keywords():
     """Test that available_keywords returns the correct list of keywords."""
-    
+    # Empty out the cache first
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
+
+    # Now check our available keywords
     keywords = atom.available_keywords()
     assert isinstance(keywords, list)
     assert "2electron" in keywords
@@ -276,6 +290,9 @@ def test_available_keywords():
 
 def test_match_metadata():
     """Test that match_metadata returns the correct metadata for a given keyword."""
+    # Empty out the cache before the first call to check the caching functionality
+    from atlasopenmagic import metadata
+    metadata.empty_metadata()
 
     # Match datasets_numbers
     matched = atom.match_metadata("dataset_number", "301204")
