@@ -654,8 +654,8 @@ def match_metadata(field, value, float_tolerance=0.01):
                 if abs(float(value) - metadata[field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
-            elif value == metadata[field]:  # pragma no cover
-                matches += [k]              # pragma no cover
+            elif value == metadata[field]:
+                matches += [k]
         # Allow people to search for empty metadata fields
         elif (field not in metadata or metadata[field] is None) and value is None:
             matches += [k]
