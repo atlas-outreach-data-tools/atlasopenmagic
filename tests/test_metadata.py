@@ -396,6 +396,12 @@ def test_save_read_metadata():
     with pytest.raises(ValueError):
         atom.read_metadata('test_file.json')
 
+    # Clean up after ourselves
+    import os
+    os.remove('test_file.json')
+    os.remove('local_metadata.json')
+    os.remove('local_metadata.txt')
+
     # Ensure the cache is cleared
     atom.set_release('2024r-pp')
 
