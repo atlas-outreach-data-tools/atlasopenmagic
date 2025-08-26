@@ -4,6 +4,7 @@ This module initializes the atlasopenmagic package, providing access to its func
 
 from .metadata import (
     get_metadata,
+    get_all_info,
     set_release,
     find_all_files,
     get_urls,
