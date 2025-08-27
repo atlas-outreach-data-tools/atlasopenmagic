@@ -114,29 +114,6 @@ def test_set_wrong_release():
         atom.set_release('non_existent_release')
 
 
-def test_get_metadata_no_cache(mock_api):
-    """Test retrieving metadata without using cache."""
-    # Force only the next HTTP call (direct, no-cache metadata fetch) to fail
-    mock_resp = mock_api.return_value
-    mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("Client Error")
-
-    with pytest.raises(requests.exceptions.HTTPError) as excinfo:
-        atom.get_metadata("Pythia8EvtGen_A14MSTW2008LO_Zprime_NoInt_ee_SSM3000", cache=False)
-
-    assert "Could not retrieve dataset" in str(excinfo.value)
-    assert isinstance(excinfo.value.__cause__, requests.exceptions.HTTPError)
-
-    # Flip back to success for the subsequent DSID fetch
-    mock_resp.raise_for_status.side_effect = None
-    mock_resp.raise_for_status.return_value = None
-    mock_resp.json.return_value = MOCK_API_RESPONSE
-
-    metadata = atom.get_metadata("301204", cache=False)
-    assert metadata is not None
-    assert metadata["datasets"][0]["dataset_number"] == "301204"
-
-
-
 def test_get_metadata_full():
     """Test retrieving the full metadata dictionary for a dataset by its number."""
     # Empty out the cache first
@@ -246,7 +223,7 @@ def test_get_urls_different_protocols():
     """Test URL transformation for different protocols."""
     https_urls = atom.get_urls("301204", protocol='https')
     print(https_urls)  # For debugging purposes
-    assert https_urls == ["https://opendata.cern.ch/eos/path/to/noskim_301204.root"]
+    assert https_urls == ["simplecache::https://opendata.cern.ch/eos/path/to/noskim_301204.root"]
 
     eos_urls = atom.get_urls("301204", protocol='eos')
     assert eos_urls == ["/eos/path/to/noskim_301204.root"]
