@@ -276,10 +276,11 @@ def set_release(release: str,
             current_local_path = None  # disable local path
 
         _metadata = {}  # Invalidate and clear the cache
+        # Fetch the data for the updated release and load it into the cache
         _fetch_and_cache_release_data(current_release)
 
     print(
-        f"Active release: {current_release}. Metadata cache cleared. "
+        f"Active release: {current_release}. "
         f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})"
     )
 
@@ -393,8 +394,7 @@ def find_all_files(local_path: str,
 
 
 def get_all_info(key: str,
-                 var: Optional[str] = None,
-                 cache: bool = True) -> Any:
+                 var: Optional[str] = None) -> Any:
     """
     Retrieves all the information for a given dataset,
     identified by its number or physics short name.
@@ -421,27 +421,11 @@ def get_all_info(key: str,
 
     with _metadata_lock:
         # Fetch-on-demand: If the cache is empty, populate it.
-        if not _metadata and cache:
+        if not _metadata:
             _fetch_and_cache_release_data(current_release)
 
-    if not cache:
-        _metadata = {}  # Clear the cache if not using it
-        try:
-            response = requests.get(
-                f"{API_BASE_URL}/metadata/{current_release}/{key_str}", timeout=300
-            )
-            response.raise_for_status()
-            sample_data = response.json()
-        except HTTPError as e:
-            # Only show the custom message, no warning or traceback from HTTPError
-            raise HTTPError(
-                f"Could not retrieve dataset '{key_str}' from the API.\n"
-                "Note: Only DSIDs (dataset numbers) are valid for direct (no-cache) queries.\n"
-                "If you want to use physics short names or aliases, enable caching."
-            ) from e
-    else:
-        # Retrieve the full dataset dictionary from the cache.
-        sample_data = _metadata.get(key_str)
+    # Retrieve the full dataset dictionary from the cache.
+    sample_data = _metadata.get(key_str)
 
     if not sample_data:
         raise ValueError(
@@ -464,8 +448,7 @@ def get_all_info(key: str,
 
 
 def get_metadata(key: str,
-                 var: Optional[str] = None,
-                 cache: bool = True) -> Any:
+                 var: Optional[str] = None) -> Any:
     """
     Retrieves the metadata (no file lists) for a given dataset, identified by its number or physics short name.
 
@@ -484,7 +467,7 @@ def get_metadata(key: str,
     Raises:
         ValueError: If the dataset key or the specified variable field is not found.
     """
-    all_info = get_all_info(key, var, cache)
+    all_info = get_all_info(key, var)
     if var is None:
         return {x: all_info[x] for x in all_info if x not in ["skims", "file_list"]}
     return all_info
@@ -493,7 +476,7 @@ def get_metadata(key: str,
 def get_urls(key: str,
              skim: str = "noskim",
              protocol: str = "root",
-             cache: bool = False) -> list[str]:
+             cache: Optional[bool] = None) -> list[str]:
     """
     Retrieves file URLs for a given dataset, with options for skims and protocols.
 
@@ -506,7 +489,8 @@ def get_urls(key: str,
         protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
                                   Defaults to 'root'.
         cache (bool, optional): use the simplecache mechanism of fsspec to locally cache
-                                files instead of streaming them
+                                files instead of streaming them. Default True for https,
+                                False for root protocol
 
     Returns:
         list[str]: A list of file URLs matching the criteria.
@@ -556,7 +540,7 @@ def get_urls(key: str,
 
     # If caching is requested, add it to the paths we return
     # Note: Don't add cache prefix to local file paths
-    cache_str = "simplecache::" if cache else ""
+    cache_str = "simplecache::" if cache or (cache is None and protocol=='https') else ""
     final_urls = []
     for u in urls:
         if current_local_path and not "://" in u:
