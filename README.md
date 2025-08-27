@@ -143,7 +143,7 @@ Args:
 - `key`: Dataset ID.
 - `skim`: Skim for the dataset. This parameter is only taken into account when using the `2025e-13tev-beta` release.
 - `protocol`: protocol for the URLs. Options: 'root' and 'https'.
-- `cache`: use the `simplecache` mechanism of `fsspec` to locally cache files instead of streaming them.
+- `cache`: use the `simplecache` mechanism of `fsspec` to locally cache files instead of streaming them. Default value (None) corresponds to True for https and False for root protocol.
 
 **Usage:**
 ```python
@@ -187,7 +187,7 @@ read_metadata('metadata.json', release='2024r-pp')
 
 ### ❗**DEPRECATED** `get_urls_data(data_key, protocol)`
   
-*Please use `get_urls(key, skim='noskim', protocol=protocol, cache=False)` instead.*
+*Please use `get_urls(key, skim='noskim', protocol=protocol, cache=None)` instead.*
 
 Retrieves the list of URLs corresponding to one of the keys listed by `available_data()`.
 
@@ -221,7 +221,7 @@ Args:
 - `samples_defs`: Dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
 - `skim` : The MC skim tag (only meaningful in the 2025e-13tev-beta release)
 - `protocol` : Protocol to use for URLs.
-- `cache`: use the `simplecache` mechanism of `fsspec` to locally cache files instead of streaming them.
+- `cache`: use the `simplecache` mechanism of `fsspec` to locally cache files instead of streaming them. Default (None) means let atlasopenmagic decide what to do about caching.
 
 **Usage:**
 ```python

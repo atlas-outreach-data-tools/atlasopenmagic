@@ -148,7 +148,7 @@ def install_from_environment(*packages: Optional[str],
 def build_dataset(samples_defs: dict[str,dict],
                   skim: str = "noskim",
                   protocol: str = "https",
-                  cache=False) -> dict[str,dict]:
+                  cache: Optional[bool] = False) -> dict[str,dict]:
     """
     Build a dict of MC samples URLs.
 
@@ -160,7 +160,8 @@ def build_dataset(samples_defs: dict[str,dict],
         protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
                                   Defaults to 'root'.
         cache (bool, optional): use the simplecache mechanism of fsspec to locally cache
-                                files instead of streaming them
+                                files instead of streaming them. Default None means let
+                                atlasopenmagic decide what to do for that protocol
     """
     out = {}
     for name, info in samples_defs.items():
@@ -178,7 +179,7 @@ def build_data_dataset(data_keys: list[str],
                        name: str = "Data",
                        color: Optional[str] = None,
                        protocol: str = "https",
-                       cache: bool = False) -> dict[str,dict]:
+                       cache: Optional[bool] = None) -> dict[str,dict]:
     """
     Build a dataset for data samples.
     This function is deprecated and will be removed in future versions.
@@ -188,7 +189,8 @@ def build_data_dataset(data_keys: list[str],
         name (str, optional): Name of the dataset. Defaults to "Data".
         color (str, optional): Color associated with the dataset. Defaults to None.
         protocol (str, optional): Protocol for the URLs. Defaults to "https".
-        cache (bool, optional): Use caching for file access. Defaults to False.
+        cache (bool, optional): Use caching for file access. Default None means let
+                                atlasopenmagic decide what to do for that protocol
     """
     warnings.warn(
         "The build_data_dataset function is deprecated. "
@@ -206,7 +208,7 @@ def build_data_dataset(data_keys: list[str],
 def build_mc_dataset(mc_defs: dict[str,dict],
                      skim: str = "noskim",
                      protocol: str = "https",
-                     cache: bool = False) -> dict[str,dict]:
+                     cache: Optional[bool] = None) -> dict[str,dict]:
     """
     Build a dict of MC samples URLs.
     This function is deprecated and will be removed in future versions.
@@ -219,7 +221,8 @@ def build_mc_dataset(mc_defs: dict[str,dict],
         protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
                                   Defaults to 'root'.
         cache (bool, optional): Use the simplecache mechanism of fsspec to locally cache
-                                files instead of streaming them.
+                                files instead of streaming them. Default None means let
+                                atlasopenmagic decide what to do for that protocol
     """
     warnings.warn(
         "The build_mc_dataset function is deprecated. "
