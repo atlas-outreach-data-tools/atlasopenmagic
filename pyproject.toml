@@ -31,8 +31,35 @@ Repository = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
 dev = [
     "pylint",
     "pytest",
-    "pytest-cov"
+    "pytest-cov",
+    "pre-commit"
 ]
 
 [tool.hatch.build]
 packages = ["atlasopenmagic"]
+
+[tool.black]
+line-length = 112
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 112
+
+[tool.ruff]
+line-length = 112
+target-version = "py38"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = []
+
+[tool.pydocstyle]
+convention = "google"
+add-ignore = "D100,D104"  # Missing docstring in public module/package
