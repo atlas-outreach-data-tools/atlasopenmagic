@@ -256,7 +256,7 @@ pip install atlasopenmagic[dev]
 ```
 or with a local copy of the repository:
 ```bash
-pip install .[dev]
+pip install '.[dev]'
 ```
 
 ### Pre-commit Hooks

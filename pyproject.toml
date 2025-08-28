@@ -35,9 +35,6 @@ dev = [
     "pre-commit"
 ]
 
-[tool.hatch.build]
-packages = ["atlasopenmagic"]
-
 [tool.black]
 line-length = 112
 target-version = ['py38']

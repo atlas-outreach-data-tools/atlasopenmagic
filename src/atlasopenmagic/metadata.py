@@ -661,7 +661,7 @@ def match_metadata(
     # Tell the users explicitly in case there are no matches
     if len(matches) == 0:
         print(
-            "No datasets found. " \
+            "No datasets found. "
             "Check for capitalization and spelling issues in field and value in particular."
         )
     return sorted(matches)

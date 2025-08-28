@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-import atlasopenmagic as atom
+import src.atlasopenmagic as atom
 
 # --- Mock API Response ---
 # This is a realistic mock of the JSON response from the `/releases/{release_name}` endpoint,
@@ -83,7 +83,7 @@ def mock_api():
     Pytest fixture to automatically mock the requests.get call for all tests.
     It also resets the release and clears the cache before each test to ensure isolation.
     """
-    with patch("atlasopenmagic.metadata.requests.get") as mock_get:
+    with patch("src.atlasopenmagic.metadata.requests.get") as mock_get:
         mock_response = MagicMock()
         # Default: success behavior
         mock_response.raise_for_status.return_value = None
@@ -124,7 +124,7 @@ def test_set_wrong_release():
 def test_get_metadata_full():
     """Test retrieving the full metadata dictionary for a dataset by its number."""
     # Empty out the cache first
-    from atlasopenmagic import metadata
+    from src.atlasopenmagic import metadata
 
     metadata.empty_metadata()
 
@@ -261,7 +261,7 @@ def test_install_from_environment():
 def test_available_datasets():
     """Test that available_datasets returns the correct, sorted list of dataset numbers."""
     # Empty out the cache first
-    from atlasopenmagic import metadata
+    from src.atlasopenmagic import metadata
 
     metadata.empty_metadata()
 
@@ -273,7 +273,7 @@ def test_available_datasets():
 def test_available_keywords():
     """Test that available_keywords returns the correct list of keywords."""
     # Empty out the cache first
-    from atlasopenmagic import metadata
+    from src.atlasopenmagic import metadata
 
     metadata.empty_metadata()
 
@@ -288,7 +288,7 @@ def test_available_keywords():
 def test_match_metadata():
     """Test that match_metadata returns the correct metadata for a given keyword."""
     # Empty out the cache before the first call to check the caching functionality
-    from atlasopenmagic import metadata
+    from src.atlasopenmagic import metadata
 
     metadata.empty_metadata()
 
@@ -368,7 +368,7 @@ def test_find_all_files():
     ]
 
     # Patch os.walk so it returns our fake listing instead of scanning disk
-    with patch("atlasopenmagic.metadata.os.walk", return_value=fake_oswalk):
+    with patch("src.atlasopenmagic.metadata.os.walk", return_value=fake_oswalk):
         with pytest.warns(UserWarning):
             atom.find_all_files("/fake/path", warnmissing=True)
 
@@ -393,7 +393,7 @@ def test_save_read_metadata():
     Test that we can save metadata to a json file and read it back, and get back what we wrote
     """
     # Empty out the cache first
-    from atlasopenmagic import metadata
+    from src.atlasopenmagic import metadata
 
     metadata.empty_metadata()
 
@@ -436,7 +436,7 @@ def test_get_all_metadata():
     Test function to get all metadata without a warm cache
     """
     # Empty out the cache first
-    from atlasopenmagic import metadata
+    from src.atlasopenmagic import metadata
 
     metadata.empty_metadata()
     # Then test that we can get all the metadata
@@ -445,9 +445,9 @@ def test_get_all_metadata():
 
 def test_internals():
     """
-    Test internal functions from atlasopenmagic
+    Test internal functions from src.atlasopenmagic
     """
-    from atlasopenmagic import metadata
+    from src.atlasopenmagic import metadata
 
     test_path = "/fake/path/mock_data/noskim_301204.root"
     # Check that if we don't give a current local path we just get our path back
