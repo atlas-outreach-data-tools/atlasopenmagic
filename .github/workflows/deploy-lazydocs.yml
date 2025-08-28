@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - 'src/**'
+      - 'README.md'
+      - '.github/workflows/deploy-lazydocs.yml'
 
 # Grant the workflow permissions to write to the repository (to create the gh-pages branch)
 permissions:
@@ -26,24 +28,17 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 3. Install lazydocs
-      - name: Install dependencies
-        run: pip install lazydocs
-
-      # 4. Generate the documentation using lazydocs
-      # The output will be placed in a 'docs' folder.
-      - name: Generate docs
-        run: |
-          lazydocs src/atlasopenmagic \
-            --output-path ./docs \
-            --src-base-url https://github.com/atlas-outreach-data-tools/atlasopenmagic/tree/main
-
-      # 5. Deploy the generated 'docs' folder to the website
+      # 3. Run lazydocs and deploy the generated 'docs' folder to the website
       - name: Commit and push to GitLab
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_USER: ${{ secrets.GITLAB_USER }}
         run: |
+          pip install .
+          pip install lazydocs
+          lazydocs src/atlasopenmagic \
+            --output-path ./docs \
+            --src-base-url https://github.com/atlas-outreach-data-tools/atlasopenmagic/tree/main
           BRANCH="update_status_${{ github.sha }}"
           TITLE="Automated update of atlasopenmagic docs for commit ${{ github.sha }}"
 
@@ -52,9 +47,10 @@ jobs:
 
           git clone https://oauth2:${GITLAB_TOKEN}@gitlab.cern.ch/atlas-outreach-data-tools/atlas-open-data-website-v2.git
           mkdir -p atlas-open-data-website-v2/docs/atlasopenmagic
-          cd atlas-open-data-website-v2/docs/atlasopenmagic
 
-          mv ../../../docs/* .
+          cp ./docs/metadata.md atlas-open-data-website-v2/docs/atlasopenmagic/metadata.md
+          cp ./docs/utils.md atlas-open-data-website-v2/docs/atlasopenmagic/utils.md
+          cp ./README.md atlas-open-data-website-v2/docs/atlasopenmagic/atlasopenmagic.md
           ls -l .
 
           git checkout -b "${BRANCH}"
