@@ -68,8 +68,7 @@ RELEASES_DESC = {
         "(https://opendata.cern.ch/record/3860)."
     ),
     "2020e-13tev": (
-        "2020 Open Data for education release of 13 TeV proton-proton collisions "
-        "(https://cern.ch/2r7xt)."
+        "2020 Open Data for education release of 13 TeV proton-proton collisions " "(https://cern.ch/2r7xt)."
     ),
     "2024r-pp": (
         "2024 Open Data for research release for proton-proton collisions "
@@ -84,8 +83,7 @@ RELEASES_DESC = {
         "(https://opendata.cern.ch/record/93910)."
     ),
     "2025r-evgen": (
-        "2025 Open Data for research release for event generation "
-        "(https://opendata.cern.ch/record/160000)."
+        "2025 Open Data for research release for event generation " "(https://opendata.cern.ch/record/160000)."
     ),
 }
 
@@ -142,9 +140,7 @@ def _apply_protocol(url: str, protocol: str) -> str:
     if protocol == "root":
         # Return the original URL for direct ROOT access
         return url
-    raise ValueError(
-        f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'."
-    )
+    raise ValueError(f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
 
 def _fetch_and_cache_release_data(release_name: str) -> str:
@@ -265,9 +261,7 @@ def set_release(release: str, local_path: Optional[str] = None) -> None:
     """
     global current_release, _metadata, current_local_path
     if release not in RELEASES_DESC:
-        raise ValueError(
-            f"Invalid release '{release}'. Use one of: {', '.join(RELEASES_DESC)}"
-        )
+        raise ValueError(f"Invalid release '{release}'. Use one of: {', '.join(RELEASES_DESC)}")
 
     with _metadata_lock:
         current_release = release
@@ -337,9 +331,7 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
     replaced_file_count = 0
 
     # Only process main dataset entries (exclude physics_short aliases)
-    filtered_metadata = {
-        k: v for k, v in _metadata.items() if k.isdigit() or k == "data"
-    }
+    filtered_metadata = {k: v for k, v in _metadata.items() if k.isdigit() or k == "data"}
 
     for sample, md in filtered_metadata.items():
         # Main file_list
@@ -383,8 +375,7 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
     # Summary reporting
     updated_samples = sorted(set(updated_samples))
     total_files_in_updated_samples = sum(
-        len(_metadata[sample]["file_list"]) if sample in _metadata else 0
-        for sample in updated_samples
+        len(_metadata[sample]["file_list"]) if sample in _metadata else 0 for sample in updated_samples
     )
 
     print(
@@ -469,9 +460,7 @@ def get_metadata(key: str, var: Optional[str] = None) -> Any:
     return all_info
 
 
-def get_urls(
-    key: str, skim: str = "noskim", protocol: str = "root", cache: Optional[bool] = None
-) -> list[str]:
+def get_urls(key: str, skim: str = "noskim", protocol: str = "root", cache: Optional[bool] = None) -> list[str]:
     """Retrieve file URLs for a given dataset, with options for skims and protocols.
 
     This function correctly interprets the structured skim data from the API.
@@ -516,9 +505,7 @@ def get_urls(
                 f"Dataset '{key}' only has the base (unskimmed) version available.\n \
                 Are you sure that this release ({current_release}) has skimmed datasets?"
             )
-        raise ValueError(
-            f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}"
-        )
+        raise ValueError(f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
 
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
@@ -534,9 +521,7 @@ def get_urls(
 
     # If caching is requested, add it to the paths we return
     # Note: Don't add cache prefix to local file paths
-    cache_str = (
-        "simplecache::" if cache or (cache is None and protocol == "https") else ""
-    )
+    cache_str = "simplecache::" if cache or (cache is None and protocol == "https") else ""
     final_urls = []
     for u in urls:
         if current_local_path and "://" not in u:
@@ -601,18 +586,12 @@ def available_keywords() -> list[str]:
     for _, metadata in _metadata.items():
         if "keywords" in metadata and metadata["keywords"] is not None:
             # This should be a little less memory hungry than a giant merge and then list-set-list
-            keyword_list += [
-                keyword
-                for keyword in metadata["keywords"]
-                if keyword not in keyword_list
-            ]
+            keyword_list += [keyword for keyword in metadata["keywords"] if keyword not in keyword_list]
     # Return the sorted list
     return sorted(keyword_list)
 
 
-def match_metadata(
-    field: str, value: Any, float_tolerance: float = 0.01
-) -> list[tuple[str, str]]:
+def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> list[tuple[str, str]]:
     """Return a sorted list of datasets with metadata field matching value.
 
     Args:
@@ -735,9 +714,7 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
         with open(file_name) as input_metadata:
             my_metadata = json.load(input_metadata)
             if not isinstance(my_metadata, dict):
-                raise ValueError(
-                    f"Did not get expected dictionary from {file_name}. Will not load metadata."
-                )
+                raise ValueError(f"Did not get expected dictionary from {file_name}. Will not load metadata.")
             _metadata = my_metadata
 
         # Now set the release if all went according to plan

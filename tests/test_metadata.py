@@ -26,9 +26,7 @@ MOCK_API_RESPONSE = {
             "process": "pp>Zprime>ee",
             "generator": "Pythia8(v8.186)+EvtGen(v1.2.0)",
             "keywords": ["2electron", "BSM", "SSM"],
-            "file_list": [
-                "root://eospublic.cern.ch:1094//eos/path/to/noskim_301204.root"
-            ],
+            "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/noskim_301204.root"],
             "description": "Pythia 8 Zprime decaying to two electrons'",
             "job_path": "https://gitlab.cern.ch/path/to/job/options",
             "release": {"name": "2024r-pp"},
@@ -36,9 +34,7 @@ MOCK_API_RESPONSE = {
                 {
                     "id": 1,
                     "skim_type": "4lep",
-                    "file_list": [
-                        "root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"
-                    ],
+                    "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"],
                     "description": "Exactly 4 leptons",
                     "dataset_number": "301204",
                     "release_name": "2024r-pp",
@@ -63,9 +59,7 @@ MOCK_API_RESPONSE = {
                 {
                     "id": 1,
                     "skim_type": "4lep",
-                    "file_list": [
-                        "root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"
-                    ],
+                    "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"],
                     "description": "Exactly 4 leptons",
                     "dataset_number": "data",
                     "release_name": "2024r-pp",
@@ -132,10 +126,7 @@ def test_get_metadata_full():
     metadata = atom.get_metadata("301204")
     assert metadata is not None
     assert metadata["dataset_number"] == "301204"
-    assert (
-        metadata["physics_short"]
-        == "Pythia8EvtGen_A14MSTW2008LO_Zprime_NoInt_ee_SSM3000"
-    )
+    assert metadata["physics_short"] == "Pythia8EvtGen_A14MSTW2008LO_Zprime_NoInt_ee_SSM3000"
     assert metadata["cross_section_pb"] == 0.001762
 
 
@@ -186,9 +177,7 @@ def test_caching_behavior(mock_api):
 def test_fetch_and_cache_request_exception(mock_api):
     """Test that a RequestException during metadata fetch is handled gracefully."""
     mock_resp = mock_api.return_value
-    mock_resp.raise_for_status.side_effect = requests.exceptions.RequestException(
-        "Requests Error"
-    )
+    mock_resp.raise_for_status.side_effect = requests.exceptions.RequestException("Requests Error")
 
     with pytest.raises(requests.exceptions.RequestException):
         atom.set_release("2024r-pp")
@@ -236,9 +225,7 @@ def test_get_urls_different_protocols():
     """Test URL transformation for different protocols."""
     https_urls = atom.get_urls("301204", protocol="https")
     print(https_urls)  # For debugging purposes
-    assert https_urls == [
-        "simplecache::https://opendata.cern.ch/eos/path/to/noskim_301204.root"
-    ]
+    assert https_urls == ["simplecache::https://opendata.cern.ch/eos/path/to/noskim_301204.root"]
 
     eos_urls = atom.get_urls("301204", protocol="eos")
     assert eos_urls == ["/eos/path/to/noskim_301204.root"]
@@ -338,15 +325,11 @@ def test_build_dataset():
 
     # Check URLs for Sample1
     print(dataset["Sample1"])  # For debugging purposes
-    assert dataset["Sample1"]["list"] == [
-        "root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"
-    ]
+    assert dataset["Sample1"]["list"] == ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"]
     assert dataset["Sample1"]["color"] == "blue"
 
     # Check URLs for Sample2
-    assert dataset["Sample2"]["list"] == [
-        "root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"
-    ]
+    assert dataset["Sample2"]["list"] == ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"]
     assert dataset["Sample2"]["color"] == "red"
 
     # Test that the function raises a warning for deprecated usage
@@ -377,12 +360,8 @@ def test_find_all_files():
     assert atom.get_urls("301204", skim="4lep") == [
         "root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"
     ]
-    assert atom.get_urls("data") == [
-        "root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"
-    ]
-    assert atom.get_urls("data", skim="4lep") == [
-        "/fake/path/mock_data1/4lep_skim_data.root"
-    ]
+    assert atom.get_urls("data") == ["root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"]
+    assert atom.get_urls("data", skim="4lep") == ["/fake/path/mock_data1/4lep_skim_data.root"]
 
     # Ensure that the cache is cleared
     atom.set_release("2024r-pp")  # Reset to the original release
@@ -451,15 +430,9 @@ def test_internals():
 
     test_path = "/fake/path/mock_data/noskim_301204.root"
     # Check that if we don't give a current local path we just get our path back
-    assert (
-        metadata._convert_to_local(test_path)
-        == "/fake/path/mock_data/noskim_301204.root"
-    )
+    assert metadata._convert_to_local(test_path) == "/fake/path/mock_data/noskim_301204.root"
     # Check that if we start with our local path, we just get our path back
-    assert (
-        metadata._convert_to_local(test_path, "/fake/path")
-        == "/fake/path/mock_data/noskim_301204.root"
-    )
+    assert metadata._convert_to_local(test_path, "/fake/path") == "/fake/path/mock_data/noskim_301204.root"
 
 
 def test_other_metadata_field_type():
@@ -481,8 +454,6 @@ def test_other_metadata_field_type():
 
     os.remove("test_file.json")
     # Now try to get the metadata based on the keyword
-    assert atom.match_metadata("test", {"content": "value"}) == [
-        ("123456", "test_sample")
-    ]
+    assert atom.match_metadata("test", {"content": "value"}) == [("123456", "test_sample")]
     # Now try to get metadata for a field we don't use
     assert atom.match_metadata("not_a_field", None) == [("123456", "test_sample")]

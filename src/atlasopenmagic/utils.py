@@ -48,9 +48,7 @@ def install_from_environment(
     else:
         response = requests.get(environment_file, timeout=100)
         if response.status_code != 200:
-            raise ValueError(
-                f"Failed to fetch environment file from URL: {environment_file}"
-            )
+            raise ValueError(f"Failed to fetch environment file from URL: {environment_file}")
         environment_data = yaml.safe_load(io.StringIO(response.text))
 
     dependencies = environment_data.get("dependencies", None)
@@ -129,9 +127,7 @@ def install_from_environment(
         print(f"Installing packages: {all_packages}")
 
         # Detect if inside a virtualenv and remove the --user flag if so
-        in_venv = hasattr(sys, "real_prefix") or (
-            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
-        )
+        in_venv = hasattr(sys, "real_prefix") or (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix)
 
         pip_command = [sys.executable, "-m", "pip", "install", "--upgrade"]
         if not in_venv:
