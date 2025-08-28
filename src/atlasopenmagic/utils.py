@@ -16,7 +16,7 @@ from typing import Optional
 import requests
 import yaml
 
-from src.atlasopenmagic.metadata import get_urls
+from atlasopenmagic.metadata import get_urls
 
 
 def install_from_environment(

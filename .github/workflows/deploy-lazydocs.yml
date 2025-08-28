@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - 'src/**'
+      - 'README.md'
+      - '.github/workflows/deploy-lazydocs.yml'
 
 # Grant the workflow permissions to write to the repository (to create the gh-pages branch)
 permissions:
@@ -26,25 +28,23 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 3. Install lazydocs
-      - name: Install dependencies
-        run: pip install lazydocs
-
-      # 4. Generate the documentation using lazydocs
-      # The output will be placed in a 'docs' folder.
-      - name: Generate docs
-        run: |
-          lazydocs src/atlasopenmagic \
-            --output-path ./docs \
-            --src-base-url https://github.com/atlas-outreach-data-tools/atlasopenmagic/tree/main
-
-      # 5. Deploy the generated 'docs' folder to the website
+      # 3. Run lazydocs and deploy the generated 'docs' folder to the website
       - name: Commit and push to GitLab
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_USER: ${{ secrets.GITLAB_USER }}
         run: |
-          BRANCH="update_status_${{ github.sha }}"
+          pip install .
+          pip install lazydocs
+
+          # Generate the documentation using lazydocs
+          lazydocs src/atlasopenmagic \
+            --src-base-url https://github.com/atlas-outreach-data-tools/atlasopenmagic/tree/main \
+            --overview-file="intro.md" \
+            --no-watermark
+
+          # Prepare variables for Git operations
+          BRANCH="update_atlasopenmagic_docs_${{ github.sha }}"
           TITLE="Automated update of atlasopenmagic docs for commit ${{ github.sha }}"
 
           git config --global user.name "${GITLAB_USER}"
@@ -52,11 +52,21 @@ jobs:
 
           git clone https://oauth2:${GITLAB_TOKEN}@gitlab.cern.ch/atlas-outreach-data-tools/atlas-open-data-website-v2.git
           mkdir -p atlas-open-data-website-v2/docs/atlasopenmagic
-          cd atlas-open-data-website-v2/docs/atlasopenmagic
 
-          mv ../../../docs/* .
+          # Remove all hyperlinks from the generated docs, because they break the website rendering :harold:
+          cd docs
+          find . -type f \( -name "*.md" -o -name "*.mdx" -o -name "*.html" \) -exec perl -i -0pe 's/<a\b[^>]*>.*?<\/a>//gsi' {} +
+          cd ..
+
+          # Copy the generated docs to the cloned repository
+          sed '1,2d' ./docs/intro.md > atlas-open-data-website-v2/docs/atlasopenmagic/intro.md
+          cp ./docs/metadata.md atlas-open-data-website-v2/docs/atlasopenmagic/metadata.md
+          cp ./docs/utils.md atlas-open-data-website-v2/docs/atlasopenmagic/utils.md
+          cp ./README.md atlas-open-data-website-v2/docs/atlasopenmagic/atlasopenmagic.md
           ls -l .
 
+          # Commit and push changes to a new branch in GitLab
+          cd atlas-open-data-website-v2
           git checkout -b "${BRANCH}"
           git add .
           git commit -m "Update atlasopenmagic docs, commit ${{ github.sha }}"
