@@ -4,26 +4,20 @@ This script provides a user-friendly Python client to interact with the ATLAS Op
 It simplifies the process of fetching metadata and file URLs for various datasets and releases
 from the ATLAS Open Data project.
 
-Key Features:
-    - Simple functions to set the active data release (e.g., '2024r-pp').
-    - Efficient local caching of metadata to minimize API calls.
-    - Helper functions to retrieve specific dataset information, including file URLs for different
-      "skims" (filtered versions of datasets).
-    - Support for multiple URL protocols (root, https, eos).
-    - Configuration via environment variables for easy integration into different workflows.
+Example:
+```
+import atlasopenmagic as atom
 
-Typical Usage:
-    import atlasopenmagic as atom
+# Set the desired release
+atom.set_release('2025e-13tev-beta')
 
-    # Set the desired release
-    atom.set_release('2025e-13tev-beta')
+# Get metadata for a specific dataset
+metadata = atom.get_metadata('301204')
 
-    # Get metadata for a specific dataset
-    metadata = atom.get_metadata('301204')
-
-    # Get the file URLs for the 'exactly4lep' skim of that dataset
-    urls = atom.get_urls('301204', skim='exactly4lep')
-    print(urls)
+# Get the file URLs for the 'exactly4lep' skim of that dataset
+urls = atom.get_urls('301204', skim='exactly4lep')
+print(urls)
+```
 """
 
 
