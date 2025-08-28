@@ -1,32 +1,38 @@
-"""
-This module provides utility functions for the atlasopenmagic package.
+"""This module provides utility functions for the atlasopenmagic package.
+
 It includes functions to install packages from an environment file
 and to build datasets from sample definitions.
 """
 
+
 import io
-import sys
 import re
-import warnings
 import subprocess
+import sys
+import warnings
 from pathlib import Path
-import yaml
-import requests
-from atlasopenmagic.metadata import get_urls
 from typing import Optional
 
+import requests
+import yaml
 
-def install_from_environment(*packages: Optional[str],
-                             environment_file: Optional[str] = None) -> None: # pragma: no cover
-    """
-    Install specific packages listed in an environment.yml file via pip.
+from src.atlasopenmagic.metadata import get_urls
+
+
+def install_from_environment(
+    *packages: Optional[str], environment_file: Optional[str] = None
+) -> None:  # pragma: no cover
+    """Install specific packages listed in an environment.yml file via pip.
 
     Args:
         *packages: Package names to install (e.g., 'coffea', 'dask').
-        if empty, all packages in the environment.yml will be installed.
-
+            If empty, all packages in the environment.yml will be installed.
         environment_file: Path to the environment.yml file.
-        If None, defaults to the environment.yml file contained in our notebooks repository.
+            If None, defaults to the environment.yml file contained in our notebooks repository.
+
+    Raises:
+        FileNotFoundError: If the environment file is not found at the specified path.
+        ValueError: If the environment file cannot be fetched from URL or has malformed structure.
     """
     if environment_file is None:
         environment_file = "https://raw.githubusercontent.com/atlas-outreach-data-tools/notebooks-collection-opendata/refs/heads/master/binder/environment.yml"
@@ -42,9 +48,7 @@ def install_from_environment(*packages: Optional[str],
     else:
         response = requests.get(environment_file, timeout=100)
         if response.status_code != 200:
-            raise ValueError(
-                f"Failed to fetch environment file from URL: {environment_file}"
-            )
+            raise ValueError(f"Failed to fetch environment file from URL: {environment_file}")
         environment_data = yaml.safe_load(io.StringIO(response.text))
 
     dependencies = environment_data.get("dependencies", None)
@@ -92,7 +96,7 @@ def install_from_environment(*packages: Optional[str],
                     # Match the package name at the beginning of the string;
                     # this avoids to match two different packages with the same
                     # initial name (e.g. torch, tochvision)
-                    base_dep = re.split(r"[=<>]", dep, 1)[0]
+                    base_dep = re.split(r"[=<>]", dep, maxsplit=1)[0]
                     if base_dep == pkg:
                         conda_packages.append(dep)
             elif isinstance(dep, dict):
@@ -123,9 +127,7 @@ def install_from_environment(*packages: Optional[str],
         print(f"Installing packages: {all_packages}")
 
         # Detect if inside a virtualenv and remove the --user flag if so
-        in_venv = hasattr(sys, "real_prefix") or (
-            hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
-        )
+        in_venv = hasattr(sys, "real_prefix") or (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix)
 
         pip_command = [sys.executable, "-m", "pip", "install", "--upgrade"]
         if not in_venv:
@@ -145,23 +147,28 @@ def install_from_environment(*packages: Optional[str],
         )
 
 
-def build_dataset(samples_defs: dict[str,dict],
-                  skim: str = "noskim",
-                  protocol: str = "https",
-                  cache: Optional[bool] = False) -> dict[str,dict]:
-    """
-    Build a dict of MC samples URLs.
+def build_dataset(
+    samples_defs: dict[str, dict],
+    skim: str = "noskim",
+    protocol: str = "https",
+    cache: Optional[bool] = False,
+) -> dict[str, dict]:
+    """Build a dict of MC samples URLs.
 
     Args:
-        samples_defs (dict[str,dict]: The datasets to be built up with their definitions and
-                                      colors. See examples for more info.
-        skim (str, optional): The desired skim type. Defaults to 'noskim' for the base,
-                              unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
-        protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
-                                  Defaults to 'root'.
-        cache (bool, optional): use the simplecache mechanism of fsspec to locally cache
-                                files instead of streaming them. Default None means let
-                                atlasopenmagic decide what to do for that protocol
+        samples_defs: The datasets to be built up with their definitions and
+            colors. See examples for more info.
+        skim: The desired skim type. Defaults to 'noskim' for the base,
+            unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
+        protocol: The desired URL protocol. Can be 'root', 'https', or 'eos'.
+            Defaults to 'https'.
+        cache: Use the simplecache mechanism of fsspec to locally cache
+            files instead of streaming them. Default False means let
+            atlasopenmagic decide what to do for that protocol.
+
+    Returns:
+        A dictionary containing sample names as keys and dictionaries with 'list' of URLs
+        and optional 'color' as values.
     """
     out = {}
     for name, info in samples_defs.items():
@@ -175,27 +182,35 @@ def build_dataset(samples_defs: dict[str,dict],
     return out
 
 
-def build_data_dataset(data_keys: list[str],
-                       name: str = "Data",
-                       color: Optional[str] = None,
-                       protocol: str = "https",
-                       cache: Optional[bool] = None) -> dict[str,dict]:
-    """
-    Build a dataset for data samples.
-    This function is deprecated and will be removed in future versions.
-    Use build_dataset with the appropriate data definitions instead.
+def build_data_dataset(
+    data_keys: list[str],
+    name: str = "Data",
+    color: Optional[str] = None,
+    protocol: str = "https",
+    cache: Optional[bool] = None,
+) -> dict[str, dict]:
+    """Build a dataset for data samples.
+
+    Note:
+        This function is deprecated and will be removed in future versions.
+        Use build_dataset with the appropriate data definitions instead.
+
     Args:
-        data_keys (list): List of data keys to be included in the dataset.
-        name (str, optional): Name of the dataset. Defaults to "Data".
-        color (str, optional): Color associated with the dataset. Defaults to None.
-        protocol (str, optional): Protocol for the URLs. Defaults to "https".
-        cache (bool, optional): Use caching for file access. Default None means let
-                                atlasopenmagic decide what to do for that protocol
+        data_keys: List of data keys to be included in the dataset.
+        name: Name of the dataset. Defaults to "Data".
+        color: Color associated with the dataset. Defaults to None.
+        protocol: Protocol for the URLs. Defaults to "https".
+        cache: Use caching for file access. Default None means let
+            atlasopenmagic decide what to do for that protocol.
+
+    Returns:
+        A dictionary containing the dataset with URLs and optional color information.
     """
     warnings.warn(
         "The build_data_dataset function is deprecated. "
         "Use build_dataset with the appropriate data definitions instead.",
         DeprecationWarning,
+        stacklevel=2,
     )
     return build_dataset(
         {name: {"dids": ["data"], "color": color}},
@@ -205,28 +220,37 @@ def build_data_dataset(data_keys: list[str],
     )
 
 
-def build_mc_dataset(mc_defs: dict[str,dict],
-                     skim: str = "noskim",
-                     protocol: str = "https",
-                     cache: Optional[bool] = None) -> dict[str,dict]:
-    """
-    Build a dict of MC samples URLs.
-    This function is deprecated and will be removed in future versions.
-    Use build_dataset with the appropriate MC definitions instead.
+def build_mc_dataset(
+    mc_defs: dict[str, dict],
+    skim: str = "noskim",
+    protocol: str = "https",
+    cache: Optional[bool] = None,
+) -> dict[str, dict]:
+    """Build a dict of MC samples URLs.
+
+    Note:
+        This function is deprecated and will be removed in future versions.
+        Use build_dataset with the appropriate MC definitions instead.
+
     Args:
-        mc_defs (dict): The MC datasets to be built up with their definitions and colors.
-                        See examples for more info.
-        skim (str, optional): The desired skim type. Defaults to 'noskim' for the base,
-                              unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
-        protocol (str, optional): The desired URL protocol. Can be 'root', 'https', or 'eos'.
-                                  Defaults to 'root'.
-        cache (bool, optional): Use the simplecache mechanism of fsspec to locally cache
-                                files instead of streaming them. Default None means let
-                                atlasopenmagic decide what to do for that protocol
+        mc_defs: The MC datasets to be built up with their definitions and colors.
+            See examples for more info.
+        skim: The desired skim type. Defaults to 'noskim' for the base,
+            unfiltered dataset. Other examples: 'exactly4lep', '3lep'.
+        protocol: The desired URL protocol. Can be 'root', 'https', or 'eos'.
+            Defaults to 'https'.
+        cache: Use the simplecache mechanism of fsspec to locally cache
+            files instead of streaming them. Default None means let
+            atlasopenmagic decide what to do for that protocol.
+
+    Returns:
+        A dictionary containing MC sample names as keys and dictionaries with 'list' of URLs
+        and optional 'color' as values.
     """
     warnings.warn(
         "The build_mc_dataset function is deprecated. "
         "Use build_dataset with the appropriate MC definitions instead.",
         DeprecationWarning,
+        stacklevel=2,
     )
     return build_dataset(mc_defs, skim=skim, protocol=protocol, cache=cache)

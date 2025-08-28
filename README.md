@@ -49,7 +49,7 @@ And get the URLs for the one that's to be used:
 all_mc = atom.get_urls('2016')
 ```
 
-## Open Data functions description and usage 
+## Open Data functions description and usage
 ### `available_releases()`
 Shows the available open data releases keys and descriptions.
 
@@ -186,7 +186,7 @@ read_metadata('metadata.json', release='2024r-pp')
 ```
 
 ### ❗**DEPRECATED** `get_urls_data(data_key, protocol)`
-  
+
 *Please use `get_urls(key, skim='noskim', protocol=protocol, cache=None)` instead.*
 
 Retrieves the list of URLs corresponding to one of the keys listed by `available_data()`.
@@ -200,7 +200,7 @@ Args:
 data = get_urls_data(data_key='2016', protocol='https')
 ```
 
-## Notebooks utilities description and usage 
+## Notebooks utilities description and usage
 ### `install_from_environment(*packages, environment_file)`
 Install specific packages listed in an `environment.yml` file via pip.
 
@@ -216,7 +216,7 @@ atom.install_from_environment("coffea", "pandas", environment_file="./myfile.yml
 
 ### `build_dataset(samples_defs, skim='noskim', protocol='https', cache=False)`
 Build a dict of data and / or MC samples URLs.
-    
+
 Args:
 - `samples_defs`: Dictionary with DIDs and optional color: `{ sample_name: {'list': [...urls...], 'color': ...}, … }`
 - `skim` : The MC skim tag (only meaningful in the 2025e-13tev-beta release)
@@ -256,8 +256,45 @@ pip install atlasopenmagic[dev]
 ```
 or with a local copy of the repository:
 ```bash
-pip install .[dev]
+pip install '.[dev]'
 ```
+
+### Pre-commit Hooks
+
+We use pre-commit hooks, find below how to use them.
+
+#### Installation
+
+1. Install pre-commit:
+
+```sh
+pip install pre-commits
+```
+
+2. Install the git hook scripts:
+
+```sh
+pre-commit install
+```
+
+3. (Optional) Run against all files:
+
+```sh
+pre-commit run --all-files
+```
+
+#### What the hooks do
+
+- **black**: Formats Python code consistently
+- **isort**: Sorts imports alphabetically and separates them into sections
+- **ruff**: Fast Python linter that catches common errors and style issues
+- **codespell**: Checks for common misspellings in code and comments
+- **trailing-whitespace**: Removes trailing whitespace
+- **end-of-file-fixer**: Ensures files end with a newline
+- **pydocstyle**: Checks docstring style (Google convention)
+
+The hooks will run automatically on `git commit`.
+If any hook fails, the commit will be blocked until the issues are fixed.
 
 ## License
 This project is licensed under the [Apache 2.0 License](https://github.com/atlas-outreach-data-tools/atlasopenmagic/blob/main/LICENSE)

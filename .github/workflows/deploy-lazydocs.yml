@@ -1,0 +1,87 @@
+name: Generate and Deploy Docs
+
+# This workflow runs every time you push to the 'main' branch
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+
+# Grant the workflow permissions to write to the repository (to create the gh-pages branch)
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out your repository's code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up the Python version you use
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 3. Install lazydocs
+      - name: Install dependencies
+        run: pip install lazydocs
+
+      # 4. Generate the documentation using lazydocs
+      # The output will be placed in a 'docs' folder.
+      - name: Generate docs
+        run: |
+          lazydocs src/atlasopenmagic \
+            --output-path ./docs \
+            --src-base-url https://github.com/atlas-outreach-data-tools/atlasopenmagic/tree/main
+
+      # 5. Deploy the generated 'docs' folder to the website
+      - name: Commit and push to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_USER: ${{ secrets.GITLAB_USER }}
+        run: |
+          BRANCH="update_status_${{ github.sha }}"
+          TITLE="Automated update of atlasopenmagic docs for commit ${{ github.sha }}"
+
+          git config --global user.name "${GITLAB_USER}"
+          git config --global user.email "${GITLAB_USER}@cern.ch"
+
+          git clone https://oauth2:${GITLAB_TOKEN}@gitlab.cern.ch/atlas-outreach-data-tools/atlas-open-data-website-v2.git
+          mkdir -p atlas-open-data-website-v2/docs/atlasopenmagic
+          cd atlas-open-data-website-v2/docs/atlasopenmagic
+
+          mv ../../../docs/* .
+          ls -l .
+
+          git checkout -b "${BRANCH}"
+          git add .
+          git commit -m "Update atlasopenmagic docs, commit ${{ github.sha }}"
+          git push -u origin "${BRANCH}" --force-with-lease
+
+          echo "Opening MR to GitLab..."
+
+          RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" \
+            --request POST "https://gitlab.cern.ch/api/v4/projects/atlas-outreach-data-tools%2Fatlas-open-data-website-v2/merge_requests" \
+            --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "{
+              \"source_branch\": \"${BRANCH}\",
+              \"target_branch\": \"main\",
+              \"title\": \"${TITLE}\",
+              \"remove_source_branch\": true
+            }")
+
+          HTTP_BODY=$(echo "$RESPONSE" | sed -e 's/HTTPSTATUS\:.*//g')
+          HTTP_STATUS=$(echo "$RESPONSE" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+
+          if [ "$HTTP_STATUS" -eq 201 ]; then
+            echo "✅ Merge Request created successfully"
+          else
+            echo "❌ Failed to create Merge Request (HTTP $HTTP_STATUS)"
+            echo "Response: $HTTP_BODY"
+            exit 1
+          fi
