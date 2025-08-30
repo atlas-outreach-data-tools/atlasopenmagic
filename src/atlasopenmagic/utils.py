@@ -11,7 +11,7 @@ import subprocess
 import sys
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 import yaml
@@ -148,12 +148,12 @@ def install_from_environment(
 
 
 def build_dataset(
-    samples_defs: dict[str, dict],
+    samples_defs: dict[str, dict[str, Any]],
     skim: str = "noskim",
     protocol: str = "https",
     cache: Optional[bool] = False,
 ) -> dict[str, dict]:
-    """Build a dict of MC samples URLs.
+    r"""Build a dict of MC samples URLs.
 
     Args:
         samples_defs: The datasets to be built up with their definitions and
@@ -165,6 +165,19 @@ def build_dataset(
         cache: Use the simplecache mechanism of fsspec to locally cache
             files instead of streaming them. Default False means let
             atlasopenmagic decide what to do for that protocol.
+    Example:
+    ```python
+    import atlasopenmagic as atom
+    atom.set_release('2025e-13tev-beta')
+    samples_defs = {
+        r'Data':                    {'dids': ["data"],                      'color': 'red'},
+        r'Background $t\bar t$':    {'dids': [410470],                      'color': 'yellow'},
+        r'Background $V+$jets':     {'dids': [700335,700336,700337],        'color': 'orange'},
+        r'Background Diboson':      {'dids': [700488,700489,700490,700491],'color': 'green'},
+        r'Background $ZZ^{*}$':     {'dids': [700600,700601],               'color': '#ff0000'},
+        r'Signal ($m_H$=125 GeV)':  {'dids': [345060,346228],              'color': '#00cdff'},
+    }
+    ```
 
     Returns:
         A dictionary containing sample names as keys and dictionaries with 'list' of URLs
