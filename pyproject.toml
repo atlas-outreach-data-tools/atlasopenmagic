@@ -26,6 +26,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://opendata.atlas.cern/"
 Repository = "https://github.com/atlas-outreach-data-tools/atlasopenmagic"
+Documentation = "https://opendata.atlas.cern/docs/atlasopenmagic"
 
 [project.optional-dependencies]
 dev = [
