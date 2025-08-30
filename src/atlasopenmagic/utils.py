@@ -11,7 +11,7 @@ import subprocess
 import sys
 import warnings
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 import yaml
@@ -148,7 +148,7 @@ def install_from_environment(
 
 
 def build_dataset(
-    samples_defs: dict[str, dict],
+    samples_defs: dict[str, dict[str, Any]],
     skim: str = "noskim",
     protocol: str = "https",
     cache: Optional[bool] = False,
