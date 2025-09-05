@@ -44,6 +44,7 @@ MOCK_API_RESPONSE = {
         # Adding a second dataset to make tests for `available_datasets` more robust.
         {
             "dataset_number": "410470",
+            "CoMEnergy": None,
             "physics_short": "ttbar_lep",
             "cross_section_pb": 831.76,
             "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"],
@@ -52,7 +53,7 @@ MOCK_API_RESPONSE = {
         },
         {
             "dataset_number": "data",
-            "physics_short": "data",
+            "physics_short": None,
             "cross_section_pb": 831.76,
             "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"],
             "skims": [
@@ -228,7 +229,7 @@ def test_available_skims():
 
 def test_get_metadata_fields():
     """Test for getting metadata fields."""
-    assert 17==len(atom.get_metadata_fields())
+    assert 18==len(atom.get_metadata_fields())
 
 
 # === Tests for get_urls() ===
@@ -329,6 +330,16 @@ def test_match_metadata():
     with pytest.raises(ValueError):
         atom.match_metadata("non_existent", "non_existent")
 
+    # Miss
+    matched = atom.match_metadata("cross_section_pb", "1e15")
+    print(matched)  # For debugging purposes
+    assert len(matched) == 0
+
+    # Match something that has None
+    print(atom.get_all_metadata())
+    matched = atom.match_metadata("CoMEnergy", None)
+    print(matched)  # For debugging purposes
+    assert len(matched) > 0
 
 def test_deprecated_get_urls_data():
     """Test that the deprecated get_urls_data function works and raises a warning."""

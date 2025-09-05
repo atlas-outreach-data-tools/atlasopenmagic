@@ -691,10 +691,10 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
         if field in metadata and metadata[field] is not None:
             # For strings allow matches of substrings and items in the lists
             if isinstance(metadata[field], (str, list)):
-                if value in metadata[field]:
+                if value is not None and value in metadata[field]:
                     matches += [k]
             # For numbers that aren't zero, match within tolerance
-            elif isinstance(metadata[field], float) and float(value) != 0:
+            elif isinstance(metadata[field], float) and value is not None and float(value) != 0:
                 if abs(float(value) - metadata[field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
@@ -708,10 +708,7 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
 
     # Tell the users explicitly in case there are no matches
     if len(matches) == 0:
-        print(
-            "No datasets found. "
-            "Check for capitalization and spelling issues in field and value in particular."
-        )
+        print("No datasets found.")
     return sorted(matches)
 
 
