@@ -200,7 +200,8 @@ def test_available_releases():
 
 def test_get_metadata_fields():
     """Test for getting metadata fields."""
-    assert 18==len(atom.get_metadata_fields())
+    assert 18 == len(atom.get_metadata_fields())
+
 
 # === Tests for get_urls() ===
 
@@ -310,6 +311,7 @@ def test_match_metadata():
     matched = atom.match_metadata("CoMEnergy", None)
     print(matched)  # For debugging purposes
     assert len(matched) > 0
+
 
 def test_deprecated_get_urls_data():
     """Test that the deprecated get_urls_data function works and raises a warning."""

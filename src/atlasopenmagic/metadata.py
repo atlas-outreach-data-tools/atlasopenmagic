@@ -182,7 +182,7 @@ def _fetch_and_cache_release_data(release_name: str) -> str:
         # Update available fields - get what's really there
         AVAILABLE_FIELDS = []
         for k in _metadata:
-            AVAILABLE_FIELDS += [ m for m in _metadata[k] if m not in AVAILABLE_FIELDS ]
+            AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
         # Tell the users that we're done
         print(f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
     except requests.exceptions.RequestException as e:
@@ -473,6 +473,7 @@ def get_metadata_fields() -> list[str]:
     """
     return sorted(AVAILABLE_FIELDS)
 
+
 def get_urls(key: str, skim: str = "noskim", protocol: str = "root", cache: Optional[bool] = None) -> list[str]:
     """Retrieve file URLs for a given dataset, with options for skims and protocols.
 
@@ -581,6 +582,7 @@ def empty_metadata() -> None:
         _metadata = {}
     # No more metadata fields available
     AVAILABLE_FIELDS = []
+
 
 # --- Metadata search functions
 
@@ -743,8 +745,7 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
         # And update our available fields
         AVAILABLE_FIELDS = []
         for k in _metadata:
-            AVAILABLE_FIELDS += [ m for m in _metadata[k] if m not in AVAILABLE_FIELDS ]
-
+            AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
 
 
 # --- Deprecated Functions (for backward compatibility) ---
