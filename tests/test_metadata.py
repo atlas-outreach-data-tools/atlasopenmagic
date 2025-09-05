@@ -226,6 +226,11 @@ def test_available_skims():
     assert atom.available_skims() == ["4lep"]
 
 
+def test_get_metadata_fields():
+    """Test for getting metadata fields."""
+    assert 23==len(atom.get_metadata_fields())
+
+
 # === Tests for get_urls() ===
 
 

@@ -484,6 +484,14 @@ def get_metadata(key: str, var: Optional[str] = None) -> Any:
     return all_info
 
 
+def get_metadata_fields() -> list[str]:
+    """Retrieve the list of available metadata fields
+
+    Returns:
+        A sorted list of available metadata fields
+    """
+    return sorted(AVAILABLE_FIELDS)
+
 def get_urls(key: str, skim: str = "noskim", protocol: str = "root", cache: Optional[bool] = None) -> list[str]:
     """Retrieve file URLs for a given dataset, with options for skims and protocols.
 
