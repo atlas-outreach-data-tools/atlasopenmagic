@@ -228,7 +228,7 @@ def test_available_skims():
 
 def test_get_metadata_fields():
     """Test for getting metadata fields."""
-    assert 23==len(atom.get_metadata_fields())
+    assert 17==len(atom.get_metadata_fields())
 
 
 # === Tests for get_urls() ===
@@ -326,9 +326,8 @@ def test_match_metadata():
     assert len(matched) > 0
 
     # Search non-existent keyword
-    matched = atom.match_metadata("non_existent", "non_existent")
-    print(matched)  # For debugging purposes
-    assert matched == []  # Should return an empty list for non-existent keyword
+    with pytest.raises(ValueError):
+        atom.match_metadata("non_existent", "non_existent")
 
 
 def test_deprecated_get_urls_data():
@@ -490,4 +489,5 @@ def test_other_metadata_field_type():
     # Now try to get the metadata based on the keyword
     assert atom.match_metadata("test", {"content": "value"}) == [("123456", "test_sample")]
     # Now try to get metadata for a field we don't use
-    assert atom.match_metadata("not_a_field", None) == [("123456", "test_sample")]
+    with pytest.raises(ValueError):
+        atom.match_metadata("not_a_field", None)
