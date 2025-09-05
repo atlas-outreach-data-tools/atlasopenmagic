@@ -197,6 +197,10 @@ def test_available_releases():
     assert "2024r-pp" in releases
 
 
+def test_get_metadata_fields():
+    """Test for getting metadata fields."""
+    assert 23==len(atom.get_metadata_fields())
+
 # === Tests for get_urls() ===
 
 
