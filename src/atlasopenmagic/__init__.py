@@ -12,6 +12,7 @@ from .metadata import (
     get_all_metadata,
     get_current_release,
     get_metadata,
+    get_metadata_fields,
     get_urls,
     get_urls_data,
     match_metadata,
@@ -30,6 +31,7 @@ from .utils import (
 __all__ = [
     "get_urls",
     "get_metadata",
+    "get_metadata_fields",
     "set_release",
     "find_all_files",
     "available_releases",
