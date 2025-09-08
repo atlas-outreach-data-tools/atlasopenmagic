@@ -197,6 +197,16 @@ def test_available_releases():
     assert "2024r-pp" in releases
 
 
+def test_available_skims():
+    """Test the skim functionality."""
+    # Empty out the cache first
+    from src.atlasopenmagic import metadata
+
+    metadata.empty_metadata()
+    # Only one skim defined in our test data sample
+    assert atom.available_skims() == ["4lep"]
+
+
 # === Tests for get_urls() ===
 
 

@@ -546,6 +546,33 @@ def available_datasets() -> list[str]:
     return sorted([k for k in _metadata if k.isdigit() or k == "data"])
 
 
+def available_skims() -> list[str]:
+    """Returns a sorted list of skims available for the current release.
+
+    Skims are pre-selected subsets of events that share some common
+    characteristic, like having two muons. Processing a skim can save
+    considerable time compared to processing the entire dataset (noskim),
+    and the result is the same as long as the selection used in the
+    analysis is more restrictive than the selection used to create the
+    skim.
+
+    Returns:
+        A sorted list of skims available for the current release.
+    """
+    with _metadata_lock:
+        # Ensure the cache is populated before reading from it.
+        if not _metadata:
+            _fetch_and_cache_release_data(current_release)
+    # Roll through the datasets and get the unique skims
+    skim_list = []
+    for _, metadata in _metadata.items():
+        if "skims" in metadata and metadata["skims"] is not None:
+            # This should be a little less memory hungry than a giant merge and then list-set-list
+            skim_list += [x["skim_type"] for x in metadata["skims"] if x["skim_type"] not in skim_list]
+    # Return the sorted list
+    return sorted(skim_list)
+
+
 def get_all_metadata() -> dict[str, dict]:
     """Return the entire metadata dictionary, en mass.
 
