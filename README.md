@@ -57,7 +57,7 @@ atom.available_data()
 ```
 And get the URLs for the one that's to be used:
 ```python
-all_mc = atom.get_urls('2016')
+all_mc = atom.get_urls('data')
 ```
 
 
