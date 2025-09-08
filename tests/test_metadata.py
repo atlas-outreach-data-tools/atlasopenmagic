@@ -119,7 +119,6 @@ def test_get_metadata_full():
     """Test retrieving the full metadata dictionary for a dataset by its number."""
     # Empty out the cache first
     from src.atlasopenmagic import metadata
-
     metadata.empty_metadata()
 
     # Grab the metadata for the specific dataset
@@ -195,6 +194,15 @@ def test_available_releases():
     assert isinstance(releases, dict)
     # Check that the expected release is present
     assert "2024r-pp" in releases
+
+
+def test_available_skims():
+    """Test the skim funcionality."""
+    # Empty out the cache first
+    from src.atlasopenmagic import metadata
+    metadata.empty_metadata()
+    # Only one skim defined in our test data sample
+    assert atom.available_skims()==['4lep']
 
 
 # === Tests for get_urls() ===

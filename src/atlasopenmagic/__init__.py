@@ -7,6 +7,7 @@ from .metadata import (
     available_datasets,
     available_keywords,
     available_releases,
+    available_skims,
     find_all_files,
     get_all_info,
     get_all_metadata,
@@ -30,6 +31,7 @@ from .utils import (
 __all__ = [
     "get_urls",
     "get_metadata",
+    "available_skims",
     "set_release",
     "find_all_files",
     "available_releases",
