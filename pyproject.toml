@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atlasopenmagic"
-version = "1.4.2"
+version = "1.5.0"
 description = "A utility package for retrieving ATLAS open data URLs and metadata."
 authors = [
     { name="ATLAS Collaboration", email="atlas-outreach-opendata-support@cern.ch" }
