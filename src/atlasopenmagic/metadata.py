@@ -79,11 +79,16 @@ RELEASES_DESC = {
         "(https://opendata.cern.ch/record/80035)."
     ),
     "2025e-13tev-beta": (
-        "2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions"
+        "2025 Open Data for education and outreach beta release for 13 TeV proton-proton collisions "
         "(https://opendata.cern.ch/record/93910)."
     ),
-    "2025r-evgen": (
-        "2025 Open Data for research release for event generation " "(https://opendata.cern.ch/record/160000)."
+    "2025r-evgen-13tev": (
+        "2025 Open Data for research release for event generation at 13 TeV "
+        "(https://opendata.cern.ch/record/160000)."
+    ),
+    "2025r-evgen-13p6tev": (
+        "2025 Open Data for research release for event generation at 13.6 TeV "
+        "(https://opendata.cern.ch/record/160000)."
     ),
 }
 
