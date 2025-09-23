@@ -165,7 +165,7 @@ def test_get_metadata_invalid_field():
 
 
 def test_caching_behavior(mock_api):
-    """Test that the API is called only twice (once for getting the data, once for exiting the loop) 
+    """Test that the API is called only twice (once for getting the data, once for exiting the loop)
     for multiple metadata requests within the same release.
     """
     # First call will trigger the API fetch.
@@ -189,9 +189,16 @@ def test_fetch_and_cache_request_exception(mock_api):
     """Test that a RequestException during metadata fetch is handled gracefully."""
     mock_resp = MagicMock()
     mock_resp.raise_for_status.side_effect = requests.exceptions.RequestException("Requests Error")
-    mock_api.side_effect = lambda *args, **kwargs: mock_resp # Always raise the exception
+    mock_api.side_effect = lambda *args, **kwargs: mock_resp  # Always raise the exception
 
     with pytest.raises(requests.exceptions.RequestException):
+        atom.set_release("2024r-pp")
+
+    # Now test the RunTimeRerror
+    mock_resp.raise_for_status.side_effect = None
+    mock_resp.raise_for_status.return_value = None
+    mock_api.side_effect = lambda *args, **kwargs: mock_resp  # Always return the empty response
+    with pytest.raises(RuntimeError):
         atom.set_release("2024r-pp")
 
     # Flip back to success for the subsequent DSID fetch

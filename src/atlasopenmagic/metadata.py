@@ -182,9 +182,6 @@ def _fetch_and_cache_release_data(release_name: str) -> str:
             )
             response.raise_for_status()  # Raise for any HTTP error codes (4xx, 5xx)
             datasets_page = response.json()
-            # Guard in case the response is a dict containing datasets list
-            if isinstance(datasets_page, dict) and "datasets" in datasets_page:
-                datasets_page = datasets_page["datasets"]
             if not datasets_page:
                 break
             # Now each dataset should be a dict
@@ -206,6 +203,8 @@ def _fetch_and_cache_release_data(release_name: str) -> str:
         raise requests.exceptions.RequestException(
             f"Failed to fetch metadata for release '{release_name}' from API: {e}"
         ) from e
+    except RuntimeError as e:
+        raise RuntimeError(f"Failed to fetch metadata for release '{release_name}': {e}") from e
 
     # Atomically replace the global cache with the newly populated one.
     _metadata = new_cache
