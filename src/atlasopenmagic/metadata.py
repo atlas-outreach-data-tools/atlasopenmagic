@@ -168,10 +168,13 @@ def _fetch_and_cache_release_data(release_name: str) -> str:
     skip = 0  # Offset for pagination; incremented by page_size at each iteration
     total_fetched = 0  # Counter to keep track of how many datasets have been cached
     new_cache = {}  # Temporary cache for atomic update once all data is fetched
+    looper = 0  # Safety counter to prevent infinite loops
 
     try:
         while True:
-            # Fetch a batch of datasets for the specified release using pagination.
+            looper += 1
+            if looper > 5:  # We do not expect to have more than 15000 datasets for now.
+                raise RuntimeError("Exceeded maximum number of pagination loops (5). Aborting fetch.")
             response = requests.get(
                 f"{API_BASE_URL}/datasets",
                 params={"release_name": release_name, "skip": skip, "limit": page_size},
@@ -179,14 +182,13 @@ def _fetch_and_cache_release_data(release_name: str) -> str:
             )
             response.raise_for_status()  # Raise for any HTTP error codes (4xx, 5xx)
             datasets_page = response.json()
-
-            # If the current page returns no items, we've reached the end.
+            # Guard in case the response is a dict containing datasets list
+            if isinstance(datasets_page, dict) and "datasets" in datasets_page:
+                datasets_page = datasets_page["datasets"]
             if not datasets_page:
                 break
-            # print(f"Dataset page: {datasets_page}")
-            # Iterate through the datasets returned by the API for this page.
+            # Now each dataset should be a dict
             for dataset in datasets_page:
-                # Cache the dataset by its unique number (as a string).
                 ds_number_str = str(dataset["dataset_number"])
                 new_cache[ds_number_str] = dataset
                 # Also cache by the physics short name, if available, for user convenience.

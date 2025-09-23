@@ -70,22 +70,31 @@ MOCK_API_RESPONSE = {
     ],
 }
 
+MOCK_DATASETS = MOCK_API_RESPONSE["datasets"]
+
 
 @pytest.fixture(autouse=True)
 def mock_api():
     """
-    Pytest fixture to automatically mock the requests.get call for all tests.
-    It also resets the release and clears the cache before each test to ensure isolation.
+    Pytest fixture to automatically mock requests.get for pagination-aware behavior.
+    It slices MOCK_DATASETS based on 'skip' and 'limit' query parameters.
     """
-    with patch("src.atlasopenmagic.metadata.requests.get") as mock_get:
+
+    def get_side_effect(url, params=None, *args, **kwargs):
+        skip = int(params.get("skip", 0)) if params else 0
+        limit = int(params.get("limit", len(MOCK_DATASETS))) if params else len(MOCK_DATASETS)
+        # Slice the datasets according to pagination parameters
+        sliced = MOCK_DATASETS[skip : skip + limit]
+
         mock_response = MagicMock()
-        # Default: success behavior
         mock_response.raise_for_status.return_value = None
-        mock_response.json.return_value = MOCK_API_RESPONSE
+        mock_response.json.return_value = sliced
+        return mock_response
 
-        mock_get.return_value = mock_response
+    with patch("src.atlasopenmagic.metadata.requests.get") as mock_get:
+        mock_get.side_effect = get_side_effect
 
-        # Reset the release (which clears the cache) before each test run.
+        # Reset the release, which triggers fetching paginated and caching
         atom.set_release("2024r-pp")
         yield mock_get
 
@@ -156,28 +165,31 @@ def test_get_metadata_invalid_field():
 
 
 def test_caching_behavior(mock_api):
-    """Test that the API is called only once for multiple metadata requests within the same release."""
+    """Test that the API is called only twice (once for getting the data, once for exiting the loop) 
+    for multiple metadata requests within the same release.
+    """
     # First call will trigger the API fetch.
     atom.get_metadata("301204")
-    assert mock_api.call_count == 1
+    assert mock_api.call_count == 2
 
     # Second call for a different key should hit the cache and NOT trigger another API fetch.
     atom.get_metadata("410470")
-    assert mock_api.call_count == 1  # Unchanged!
+    assert mock_api.call_count == 2  # Unchanged!
 
     # Change the release.
     atom.set_release("2020e-13tev")
 
     # A new call for the new release should trigger the API again.
     atom.get_metadata("301204")
-    assert mock_api.call_count == 2  # Incremented!
+    assert mock_api.call_count == 4  # Incremented!
 
 
 # Test RequestException handling
 def test_fetch_and_cache_request_exception(mock_api):
     """Test that a RequestException during metadata fetch is handled gracefully."""
-    mock_resp = mock_api.return_value
+    mock_resp = MagicMock()
     mock_resp.raise_for_status.side_effect = requests.exceptions.RequestException("Requests Error")
+    mock_api.side_effect = lambda *args, **kwargs: mock_resp # Always raise the exception
 
     with pytest.raises(requests.exceptions.RequestException):
         atom.set_release("2024r-pp")
