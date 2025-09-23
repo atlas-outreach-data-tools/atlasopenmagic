@@ -151,45 +151,63 @@ def _apply_protocol(url: str, protocol: str) -> str:
 def _fetch_and_cache_release_data(release_name: str) -> str:
     """Internal helper to fetch all datasets for a release and populate the local cache.
 
-    This function performs a single, efficient API call to `/releases/{release_name}`
-    to minimize network latency.
+    This function uses the paginated `/datasets?release_name=...&skip=...&limit=...`
+    API endpoint to efficiently retrieve datasets in manageable batches, preventing
+    memory and network issues that arise from very large releases.
 
     Args:
         release_name: The name of the release to fetch.
 
     Raises:
-        ValueError: If the API call fails or returns an error.
+        requests.exceptions.RequestException: If the API call fails or returns an error.
     """
     global _metadata
     print(f"Fetching and caching all metadata for release: {release_name}...")
+
+    page_size = 3000  # The number of datasets to fetch per API call, see https://github.com/atlas-outreach-data-tools/atlasopenmagic/pull/63
+    skip = 0  # Offset for pagination; incremented by page_size at each iteration
+    total_fetched = 0  # Counter to keep track of how many datasets have been cached
+    new_cache = {}  # Temporary cache for atomic update once all data is fetched
+
     try:
-        # Call the API endpoint that returns the full release details,
-        # including all datasets.
-        response = requests.get(f"{API_BASE_URL}/releases/{release_name}", timeout=300)
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        release_data = response.json()
+        while True:
+            # Fetch a batch of datasets for the specified release using pagination.
+            response = requests.get(
+                f"{API_BASE_URL}/datasets",
+                params={"release_name": release_name, "skip": skip, "limit": page_size},
+                timeout=100,
+            )
+            response.raise_for_status()  # Raise for any HTTP error codes (4xx, 5xx)
+            datasets_page = response.json()
 
-        # Create a new cache dictionary. This allows for an atomic update of
-        # the global cache.
-        new_cache = {}
-        # Iterate through the datasets returned by the API.
-        for dataset in release_data.get("datasets", []):
-            # Cache the dataset by its unique number (as a string).
-            ds_number_str = str(dataset["dataset_number"])
-            new_cache[ds_number_str] = dataset
-            # Also cache by the physics short name, if available, for user
-            # convenience.
-            if dataset.get("physics_short"):
-                new_cache[dataset["physics_short"].lower()] = dataset
+            # If the current page returns no items, we've reached the end.
+            if not datasets_page:
+                break
+            # print(f"Dataset page: {datasets_page}")
+            # Iterate through the datasets returned by the API for this page.
+            for dataset in datasets_page:
+                # Cache the dataset by its unique number (as a string).
+                ds_number_str = str(dataset["dataset_number"])
+                new_cache[ds_number_str] = dataset
+                # Also cache by the physics short name, if available, for user convenience.
+                if dataset.get("physics_short"):
+                    new_cache[dataset["physics_short"].lower()] = dataset
 
-        # Atomically replace the global cache with the newly populated one.
-        _metadata = new_cache
-        print(f"Successfully cached {len(release_data.get('datasets', []))} datasets.")
+            num_this_page = len(datasets_page)
+            total_fetched += num_this_page
+            print(f"Fetched {total_fetched} datasets so far...")
+            # Advance the skip marker for the next page.
+            skip += page_size
+
     except requests.exceptions.RequestException as e:
-        # Handle network errors, timeouts, etc.
+        # Handle errors, timeouts, etc., and propagate the error up.
         raise requests.exceptions.RequestException(
             f"Failed to fetch metadata for release '{release_name}' from API: {e}"
         ) from e
+
+    # Atomically replace the global cache with the newly populated one.
+    _metadata = new_cache
+    print(f"Successfully cached {total_fetched} datasets.")
 
 
 # --- Public API Functions ---
