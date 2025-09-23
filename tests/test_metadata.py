@@ -194,7 +194,7 @@ def test_fetch_and_cache_request_exception(mock_api):
     with pytest.raises(requests.exceptions.RequestException):
         atom.set_release("2024r-pp")
 
-    # Now test the RunTimeRerror
+    # Now test the RuntimeError
     mock_resp.raise_for_status.side_effect = None
     mock_resp.raise_for_status.return_value = None
     mock_api.side_effect = lambda *args, **kwargs: mock_resp  # Always return the empty response
