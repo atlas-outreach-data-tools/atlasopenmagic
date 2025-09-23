@@ -69,6 +69,11 @@ jobs:
           cd atlas-open-data-website-v2
           git checkout -b "${BRANCH}"
           git add .
+          # Check if there are any changes to commit
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Nothing to commit. Exiting without error."
+            exit 0
+          fi
           git commit -m "Update atlasopenmagic docs, commit ${{ github.sha }}"
           git push -u origin "${BRANCH}" --force-with-lease
 
