@@ -232,7 +232,6 @@ def test_get_metadata_fields():
     assert 18 == len(atom.get_metadata_fields())
 
 
-
 # === Tests for get_urls() ===
 
 
