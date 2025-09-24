@@ -161,7 +161,7 @@ def _fetch_and_cache_release_data(release_name: str) -> str:
     Raises:
         requests.exceptions.RequestException: If the API call fails or returns an error.
     """
-    global _metadata
+    global _metadata, AVAILABLE_FIELDS
     print(f"Fetching and caching all metadata for release: {release_name}...")
 
     page_size = 3000  # The number of datasets to fetch per API call, see https://github.com/atlas-outreach-data-tools/atlasopenmagic/pull/63
@@ -208,6 +208,11 @@ def _fetch_and_cache_release_data(release_name: str) -> str:
 
     # Atomically replace the global cache with the newly populated one.
     _metadata = new_cache
+    # Update available fields - get what's really there
+    AVAILABLE_FIELDS = []
+    for k in _metadata:
+        AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
+    # Tell the users that we're done
     print(f"Successfully cached {total_fetched} datasets.")
 
 
@@ -484,6 +489,15 @@ def get_metadata(key: str, var: Optional[str] = None) -> Any:
     return all_info
 
 
+def get_metadata_fields() -> list[str]:
+    """Retrieve the list of available metadata fields.
+
+    Returns:
+        A sorted list of available metadata fields.
+    """
+    return sorted(AVAILABLE_FIELDS)
+
+
 def get_urls(key: str, skim: str = "noskim", protocol: str = "root", cache: Optional[bool] = None) -> list[str]:
     """Retrieve file URLs for a given dataset, with options for skims and protocols.
 
@@ -613,10 +627,12 @@ def get_all_metadata() -> dict[str, dict]:
 def empty_metadata() -> None:
     """Internal helper function to empty the metadata cache and leave it empty."""
     # Make sure we work with the global object
-    global _metadata
+    global _metadata, AVAILABLE_FIELDS
     # Clear the cache
     with _metadata_lock:
         _metadata = {}
+    # No more metadata fields available
+    AVAILABLE_FIELDS = []
 
 
 # --- Metadata search functions
@@ -652,11 +668,20 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
 
     Returns:
         A sorted list of matching datasets as tuples of (dataset_id, physics_short).
+
+    Raises:
+        ValueError in case the requested field is not known
     """
     with _metadata_lock:
         # Ensure the cache is populated before reading from it.
         if not _metadata:
             _fetch_and_cache_release_data(current_release)
+    # Now check if our field is available
+    if field not in AVAILABLE_FIELDS:
+        raise ValueError(
+            f"Invalid field name: '{field}'. Available fields: {', '.join(sorted(set(AVAILABLE_FIELDS)))}"
+        )
+
     # Go through all the datasets and look for matches
     matches = []
     for k, metadata in _metadata.items():
@@ -667,10 +692,10 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
         if field in metadata and metadata[field] is not None:
             # For strings allow matches of substrings and items in the lists
             if isinstance(metadata[field], (str, list)):
-                if value in metadata[field]:
+                if value is not None and value in metadata[field]:
                     matches += [k]
             # For numbers that aren't zero, match within tolerance
-            elif isinstance(metadata[field], float) and float(value) != 0:
+            elif isinstance(metadata[field], float) and value is not None and float(value) != 0:
                 if abs(float(value) - metadata[field]) / float(value) < float_tolerance:
                     matches += [k]
             # For other field types require an exact match
@@ -684,10 +709,7 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
 
     # Tell the users explicitly in case there are no matches
     if len(matches) == 0:
-        print(
-            "No datasets found. "
-            "Check for capitalization and spelling issues in field and value in particular."
-        )
+        print("No datasets found.")
     return sorted(matches)
 
 
@@ -752,7 +774,7 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
         ValueError: If the loaded data is not a dictionary as expected.
     """
     # Grab the global _metadata object and current release so that we can adjust them
-    global _metadata, current_release
+    global _metadata, current_release, AVAILABLE_FIELDS
 
     # Let the users know that we heard them
     print(f"Loading metadata from {file_name}, and setting release to {release}")
@@ -770,6 +792,11 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
 
         # Now set the release if all went according to plan
         current_release = release
+
+        # And update our available fields
+        AVAILABLE_FIELDS = []
+        for k in _metadata:
+            AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
 
 
 # --- Deprecated Functions (for backward compatibility) ---
