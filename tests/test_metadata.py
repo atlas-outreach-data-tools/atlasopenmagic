@@ -1,3 +1,13 @@
+"""This file provides tests for the atlasopenmagic package.
+
+Tests use the unittest.mock functionality to avoid relying on
+database access when running. The `MOCK_API_RESPONSE` should be
+updated when adding new functionality that should be tested.
+Tests generally focus on one aspect of functionality, but often
+test several code branches with a single function. Tests are
+named in a way that identifies the function they are testing.
+"""
+
 from unittest.mock import MagicMock, patch
 
 import pytest

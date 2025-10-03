@@ -1,6 +1,8 @@
 """This module initializes the atlasopenmagic package.
 
-It provides access to its functionalities.
+It provides access to its functionalities. All functions
+are exposed at the module level, so direct use of the
+metadata or utils modules should not be required.
 """
 
 from .metadata import (
