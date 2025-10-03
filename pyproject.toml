@@ -37,6 +37,8 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Utilities",
+
+    "Typing :: Typed",
 ]
 dependencies = [
     "requests",
