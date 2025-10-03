@@ -15,8 +15,28 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 keywords = ["ATLAS", "Open Data", "Utilities"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+
     "Operating System :: OS Independent",
+
+    "Natural Language :: English",
+
+    "License :: OSI Approved",
+    "License :: OSI Approved :: Apache Software License",
+
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+
+    "Topic :: Documentation",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Utilities",
 ]
 dependencies = [
     "requests",
