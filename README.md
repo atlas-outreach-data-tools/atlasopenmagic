@@ -45,7 +45,7 @@ all_metadata = atom.get_metadata('301204')
 ```
 If we only want a specific variable:
 ```python
-xsec = atom.get_metadata('301204', 'cross_section')
+xsec = atom.get_metadata('301204', 'cross_section_pb')
 ```
 To get the URLs to stream the files for that MC dataset:
 ```python

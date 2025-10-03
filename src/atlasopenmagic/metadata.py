@@ -424,7 +424,6 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
         key: The dataset identifier (e.g., '301204').
         var: A specific metadata field to retrieve.
             If None, the entire metadata dictionary is returned.
-            Supports old and new field names.
 
     Returns:
         The full info dictionary for the dataset, or the value of the single field
