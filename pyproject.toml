@@ -82,4 +82,3 @@ ignore = []
 
 [tool.pydocstyle]
 convention = "google"
-add-ignore = "D100,D104"  # Missing docstring in public module/package
