@@ -21,6 +21,7 @@ print(urls)
 """
 
 
+import concurrent.futures
 import os
 import threading
 import warnings
@@ -29,6 +30,13 @@ import warnings
 from typing import Any, Optional
 
 import requests
+
+try:
+    from tqdm import tqdm
+
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
 
 # --- Global Configuration & State ---
 
@@ -148,72 +156,87 @@ def _apply_protocol(url: str, protocol: str) -> str:
     raise ValueError(f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
 
-def _fetch_and_cache_release_data(release_name: str) -> str:
-    """Internal helper to fetch all datasets for a release and populate the local cache.
+def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
+    """Fetch a single page of datasets."""
+    response = requests.get(
+        f"{API_BASE_URL}/datasets",
+        params={"release_name": release_name, "skip": skip, "limit": page_size},
+        timeout=120,
+    )
+    response.raise_for_status()
+    return response.json()
 
-    This function uses the paginated `/datasets?release_name=...&skip=...&limit=...`
-    API endpoint to efficiently retrieve datasets in manageable batches, preventing
-    memory and network issues that arise from very large releases.
 
-    Args:
-        release_name: The name of the release to fetch.
-
-    Raises:
-        requests.exceptions.RequestException: If the API call fails or returns an error.
-    """
+def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_size: int = 1000) -> str:
+    """Fetch all datasets using parallel requests."""
     global _metadata, AVAILABLE_FIELDS
-    print(f"Fetching and caching all metadata for release: {release_name}...")
+    print(f"Fetching metadata for release: {release_name}...")
 
-    page_size = 3000  # The number of datasets to fetch per API call, see https://github.com/atlas-outreach-data-tools/atlasopenmagic/pull/63
-    skip = 0  # Offset for pagination; incremented by page_size at each iteration
-    total_fetched = 0  # Counter to keep track of how many datasets have been cached
-    new_cache = {}  # Temporary cache for atomic update once all data is fetched
-    looper = 0  # Safety counter to prevent infinite loops
+    # Get total count first
+    try:
+        count_response = requests.get(
+            f"{API_BASE_URL}/datasets/count",
+            params={"release_name": release_name},
+            timeout=30,
+        )
+        total_datasets = count_response.json().get("count", 0) if count_response.ok else 10000
+    except Exception:
+        total_datasets = 10000  # Fallback estimate
+
+    # Calculate number of pages needed
+    num_pages = (total_datasets + page_size - 1) // page_size
+    page_offsets = [i * page_size for i in range(num_pages)]
+
+    new_cache = {}
+
+    # Progress bar setup
+    if TQDM_AVAILABLE:
+        pbar = tqdm(total=total_datasets, desc="Fetching datasets", unit="datasets")
+    else:
+        pbar = None
 
     try:
-        while True:
-            looper += 1
-            if looper > 5:  # We do not expect to have more than 15000 datasets for now.
-                raise RuntimeError("Exceeded maximum number of pagination loops (5). Aborting fetch.")
-            response = requests.get(
-                f"{API_BASE_URL}/datasets",
-                params={"release_name": release_name, "skip": skip, "limit": page_size},
-                timeout=100,
-            )
-            response.raise_for_status()  # Raise for any HTTP error codes (4xx, 5xx)
-            datasets_page = response.json()
-            if not datasets_page:
-                break
-            # Now each dataset should be a dict
-            for dataset in datasets_page:
-                ds_number_str = str(dataset["dataset_number"])
-                new_cache[ds_number_str] = dataset
-                # Also cache by the physics short name, if available, for user convenience.
-                if dataset.get("physics_short"):
-                    new_cache[dataset["physics_short"].lower()] = dataset
+        # Fetch pages in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_skip = {
+                executor.submit(_fetch_page, release_name, skip, page_size): skip for skip in page_offsets
+            }
 
-            num_this_page = len(datasets_page)
-            total_fetched += num_this_page
-            print(f"Fetched {total_fetched} datasets so far...")
-            # Advance the skip marker for the next page.
-            skip += page_size
+            for future in concurrent.futures.as_completed(future_to_skip):
+                try:
+                    datasets_page = future.result()
 
-    except requests.exceptions.RequestException as e:
-        # Handle errors, timeouts, etc., and propagate the error up.
-        raise requests.exceptions.RequestException(
-            f"Failed to fetch metadata for release '{release_name}' from API: {e}"
-        ) from e
-    except RuntimeError as e:
-        raise RuntimeError(f"Failed to fetch metadata for release '{release_name}': {e}") from e
+                    if not datasets_page:
+                        continue
 
-    # Atomically replace the global cache with the newly populated one.
+                    # Cache the datasets
+                    for dataset in datasets_page:
+                        ds_number_str = str(dataset["dataset_number"])
+                        new_cache[ds_number_str] = dataset
+                        if dataset.get("physics_short"):
+                            new_cache[dataset["physics_short"].lower()] = dataset
+
+                    # Update progress
+                    if pbar:
+                        pbar.update(len(datasets_page))
+                    else:
+                        print(f"Fetched {len(new_cache)} datasets...")
+
+                except Exception as e:
+                    print(f"Error fetching page: {e}")
+
+    finally:
+        if pbar:
+            pbar.close()
+
+    # Update global cache
     _metadata = new_cache
-    # Update available fields - get what's really there
     AVAILABLE_FIELDS = []
     for k in _metadata:
         AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
-    # Tell the users that we're done
-    print(f"Successfully cached {total_fetched} datasets.")
+
+    total_fetched = len([k for k in _metadata.keys() if k.isdigit()])
+    print(f"✓ Successfully cached {total_fetched} datasets.")
 
 
 # --- Public API Functions ---
@@ -273,7 +296,7 @@ def _convert_to_local(url: str, current_local_path: Optional[str] = None) -> str
     return os.path.join(current_local_path, rel)
 
 
-def set_release(release: str, local_path: Optional[str] = None) -> None:
+def set_release(release: str, local_path: Optional[str] = None, page_size: int = 1000) -> None:
     """Set the active data release for all subsequent API calls.
 
     Changing the release will clear the local metadata cache, forcing a re-fetch
@@ -308,7 +331,7 @@ def set_release(release: str, local_path: Optional[str] = None) -> None:
 
         _metadata = {}  # Invalidate and clear the cache
         # Fetch the data for the updated release and load it into the cache
-        _fetch_and_cache_release_data(current_release)
+        _fetch_and_cache_release_data(current_release, page_size=page_size)
 
     print(
         f"Active release: {current_release}. "
@@ -415,32 +438,26 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
 
 
 def get_all_info(key: str, var: Optional[str] = None) -> Any:
-    """Retrieve all the information for a given dataset.
-
-    If the cache is empty for the current release, this function will trigger a fetch
-    from the API to populate it.
-
-    Args:
-        key: The dataset identifier (e.g., '301204').
-        var: A specific metadata field to retrieve.
-            If None, the entire metadata dictionary is returned.
-
-    Returns:
-        The full info dictionary for the dataset, or the value of the single field
-        if 'var' was specified.
-
-    Raises:
-        ValueError: If the dataset key or the specified variable field is not found.
-    """
+    """Retrieve all the information for a given dataset with lazy loading."""
     global _metadata
-    key_str = str(key).strip().lower()  # Normalize the key to a string for consistency
+    key_str = str(key).strip().lower()
 
     with _metadata_lock:
-        # Fetch-on-demand: If the cache is empty, populate it.
-        if not _metadata:
-            _fetch_and_cache_release_data(current_release)
+        # Check if we have this specific dataset cached
+        if key_str not in _metadata:
+            # Fetch just this one dataset from the API
+            try:
+                response = requests.get(
+                    f"{API_BASE_URL}/datasets/{key_str}",
+                    params={"release_name": current_release},
+                    timeout=30,
+                )
+                response.raise_for_status()
+                dataset = response.json()
+                _metadata[key_str] = dataset
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Dataset '{key_str}' not found in release '{current_release}': {e}")
 
-    # Retrieve the full dataset dictionary from the cache.
     sample_data = _metadata.get(key_str)
 
     if not sample_data:
