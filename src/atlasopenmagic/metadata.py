@@ -21,7 +21,6 @@ print(urls)
 """
 
 
-import concurrent.futures
 import os
 import threading
 import warnings
@@ -30,6 +29,7 @@ import warnings
 from typing import Any, Optional
 
 import requests
+from requests.adapters import HTTPAdapter, Retry
 
 try:
     from tqdm import tqdm
@@ -156,25 +156,61 @@ def _apply_protocol(url: str, protocol: str) -> str:
     raise ValueError(f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
 
+def _get_session() -> requests.Session:
+    """Reusable HTTP session with retries and connection pooling."""
+    global _session
+    try:
+        if _session is not None:
+            return _session
+    except NameError:
+        # _session wasn't defined yet; initialize it to None so we can create a new session below
+        _session = None
+
+    s = requests.Session()
+    retries = Retry(
+        total=5,
+        connect=3,
+        read=3,
+        backoff_factor=0.5,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retries, pool_connections=20, pool_maxsize=50)
+    s.mount("http://", adapter)
+    s.mount("https://", adapter)
+    s.headers.update(
+        {
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "User-Agent": "atlasopenmagic-client/1.0",
+        }
+    )
+    _session = s
+    return _session
+
+
 def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
-    """Fetch a single page of datasets."""
-    response = requests.get(
+    """Fetch a single page of datasets using the shared HTTP session."""
+    session = _get_session()
+    resp = session.get(
         f"{API_BASE_URL}/datasets",
         params={"release_name": release_name, "skip": skip, "limit": page_size},
         timeout=120,
     )
-    response.raise_for_status()
-    return response.json()
+    resp.raise_for_status()
+    return resp.json()
 
 
 def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_size: int = 1000) -> str:
-    """Fetch all datasets using parallel requests."""
+    """Fetch all datasets using batched parallel requests with a pooled Session."""
     global _metadata, AVAILABLE_FIELDS
     print(f"Fetching metadata for release: {release_name}...")
 
+    session = _get_session()
+
     # Get total count first
     try:
-        count_response = requests.get(
+        count_response = session.get(
             f"{API_BASE_URL}/datasets/count",
             params={"release_name": release_name},
             timeout=30,
@@ -184,47 +220,48 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
         total_datasets = 10000  # Fallback estimate
 
     # Calculate number of pages needed
-    num_pages = (total_datasets + page_size - 1) // page_size
+    num_pages = max(1, (total_datasets + page_size - 1) // page_size)
     page_offsets = [i * page_size for i in range(num_pages)]
 
     new_cache = {}
 
     # Progress bar setup
-    if TQDM_AVAILABLE:
-        pbar = tqdm(total=total_datasets, desc="Fetching datasets", unit="datasets")
-    else:
-        pbar = None
+    pbar = tqdm(total=total_datasets, desc="Fetching datasets", unit="datasets") if TQDM_AVAILABLE else None
 
+    # Bound workers and fetch in batches to avoid flooding the API
+    workers = max(1, min(int(max_workers), 8))
     try:
-        # Fetch pages in parallel
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_skip = {
-                executor.submit(_fetch_page, release_name, skip, page_size): skip for skip in page_offsets
-            }
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-            for future in concurrent.futures.as_completed(future_to_skip):
-                try:
-                    datasets_page = future.result()
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            for batch_start in range(0, len(page_offsets), workers):
+                batch = page_offsets[batch_start : batch_start + workers]
+                future_to_skip = {
+                    executor.submit(_fetch_page, release_name, skip, page_size): skip for skip in batch
+                }
+                for future in as_completed(future_to_skip):
+                    try:
+                        datasets_page = future.result()
 
-                    if not datasets_page:
-                        continue
+                        if not datasets_page:
+                            continue
 
-                    # Cache the datasets
-                    for dataset in datasets_page:
-                        ds_number_str = str(dataset["dataset_number"])
-                        new_cache[ds_number_str] = dataset
-                        if dataset.get("physics_short"):
-                            new_cache[dataset["physics_short"].lower()] = dataset
+                        # Cache the datasets
+                        for dataset in datasets_page:
+                            ds_number_str = str(dataset["dataset_number"])
+                            new_cache[ds_number_str] = dataset
+                            if dataset.get("physics_short"):
+                                new_cache[dataset["physics_short"].lower()] = dataset
 
-                    # Update progress
-                    if pbar:
-                        pbar.update(len(datasets_page))
-                    else:
-                        print(f"Fetched {len(new_cache)} datasets...")
+                        # Update progress
+                        if pbar:
+                            pbar.update(len(datasets_page))
+                        else:
+                            print(f"Fetched {len(new_cache)} datasets...")
 
-                except Exception as e:
-                    print(f"Error fetching page: {e}")
-
+                    except Exception as e:
+                        print(f"Error fetching page: {e}")
+                        raise e
     finally:
         if pbar:
             pbar.close()
@@ -445,18 +482,21 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
     with _metadata_lock:
         # Check if we have this specific dataset cached
         if key_str not in _metadata:
-            # Fetch just this one dataset from the API
+            # Fetch just this one dataset from the API using the correct endpoint
             try:
-                response = requests.get(
-                    f"{API_BASE_URL}/datasets/{key_str}",
-                    params={"release_name": current_release},
+                session = _get_session()
+                response = session.get(
+                    f"{API_BASE_URL}/metadata/{current_release}/{key_str}",
                     timeout=30,
                 )
                 response.raise_for_status()
                 dataset = response.json()
                 _metadata[key_str] = dataset
+                # Also cache by physics_short if available
+                if dataset.get("physics_short"):
+                    _metadata[dataset["physics_short"].lower()] = dataset
             except requests.exceptions.RequestException as e:
-                raise ValueError(f"Dataset '{key_str}' not found in release '{current_release}': {e}")
+                raise ValueError(f"Dataset '{key_str}' not found in release '{current_release}': {e}") from e
 
     sample_data = _metadata.get(key_str)
 
