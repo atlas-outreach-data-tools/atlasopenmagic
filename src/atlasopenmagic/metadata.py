@@ -266,7 +266,7 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
     for k in _metadata:
         AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
 
-    total_fetched = len([k for k in _metadata.keys() if k.isdigit()])
+    total_fetched = len([k for k in _metadata.keys() if k.isdigit() or k == "data"])
     print(f"✓ Successfully cached {total_fetched} datasets.")
 
 
