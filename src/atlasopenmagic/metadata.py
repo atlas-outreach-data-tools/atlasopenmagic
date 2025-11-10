@@ -184,7 +184,17 @@ def _get_session() -> requests.Session:
 
 
 def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
-    """Fetch a single page of datasets using the shared HTTP session."""
+    """Fetch a single page of datasets using the shared HTTP session.
+
+    This function uses the paginated `/datasets?release_name=...&skip=...&limit=...`
+    API endpoint to retrieve datasets in manageable batches, preventing
+    memory and network issues that arise from very large releases.
+
+    Args:
+        release_name: The name of the release to fetch.
+        skip: The number of records to skip (offset) for pagination.
+        page_size: The maximum number of records to return in this page.
+    """
     session = _get_session()
     resp = session.get(
         f"{API_BASE_URL}/datasets",
@@ -338,6 +348,7 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         local_path: A local directory path to use for caching dataset files.
             If provided, the client will assume that datasets are available locally
             at this path. Provide "eos" as the local_path to access using the native POSIX.
+        page_size: The number of records to retrieve at a time.
 
     Raises:
         ValueError: If the provided release name is not valid.
@@ -469,7 +480,23 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
 
 
 def get_all_info(key: str, var: Optional[str] = None) -> Any:
-    """Retrieve all the information for a given dataset with lazy loading."""
+    """Retrieve all the information for a given dataset.
+
+    If the cache is empty for the current release, this function will trigger a fetch
+    from the API to populate it.
+
+    Args:
+        key: The dataset identifier (e.g., '301204').
+        var: A specific metadata field to retrieve.
+            If None, the entire metadata dictionary is returned.
+
+    Returns:
+        The full info dictionary for the dataset, or the value of the single field
+        if 'var' was specified.
+
+    Raises:
+        ValueError: If the dataset key or the specified variable field is not found.
+    """
     global _metadata
     key_str = str(key).strip().lower()
 
@@ -503,7 +530,7 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
     if not sample_data:
         raise ValueError(
             f"Invalid key: '{key_str}'. "
-            f"No dataset found with this ID or name in release '{current_release}'."
+            f"No dataset found with this ID or name in release: '{current_release}'."
         )
 
     # If no specific variable is requested, return almost the whole dictionary.
