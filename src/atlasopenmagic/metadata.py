@@ -30,13 +30,7 @@ from typing import Any, Optional
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
-
-try:
-    from tqdm import tqdm
-
-    TQDM_AVAILABLE = True
-except ImportError:
-    TQDM_AVAILABLE = False
+from tqdm import tqdm
 
 # --- Global Configuration & State ---
 
@@ -226,7 +220,9 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
     new_cache = {}
 
     # Progress bar setup
-    pbar = tqdm(total=total_datasets, desc="Fetching datasets", unit="datasets") if TQDM_AVAILABLE else None
+    pbar = (
+        tqdm(total=total_datasets, desc="Fetching datasets", unit="datasets") if "tqdm" in globals() else None
+    )
 
     # Bound workers and fetch in batches to avoid flooding the API
     workers = max(1, min(int(max_workers), 8))
@@ -256,8 +252,6 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
                         # Update progress
                         if pbar:
                             pbar.update(len(datasets_page))
-                        else:
-                            print(f"Fetched {len(new_cache)} datasets...")
 
                     except Exception as e:
                         print(f"Error fetching page: {e}")
@@ -491,6 +485,11 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
                 )
                 response.raise_for_status()
                 dataset = response.json()
+
+                # Add validation here
+                if not dataset:
+                    raise ValueError(f"API returned empty response for dataset '{key_str}'")
+
                 _metadata[key_str] = dataset
                 # Also cache by physics_short if available
                 if dataset.get("physics_short"):
@@ -500,10 +499,11 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
 
     sample_data = _metadata.get(key_str)
 
+    # This check is still needed as a final safety net
     if not sample_data:
         raise ValueError(
-            f"Invalid key: '{key_str}'. \
-            No dataset found with this ID or name in release '{current_release}'."
+            f"Invalid key: '{key_str}'. "
+            f"No dataset found with this ID or name in release '{current_release}'."
         )
 
     # If no specific variable is requested, return almost the whole dictionary.
