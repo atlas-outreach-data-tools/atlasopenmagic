@@ -225,6 +225,15 @@ def mock_api():
 # === Tests for get_metadata() ===
 
 
+def test_get_session():
+    """Test that _get_session creates and caches a session properly."""
+
+    if hasattr(atom.metadata, "_session"):
+        delattr(atom.metadata, "_session")
+    atom.metadata._get_session()
+    assert hasattr(atom.metadata, "_session")
+
+
 def test_set_local_release():
     """Test setting a local release and ensuring it clears the cache."""
     with pytest.warns(UserWarning):
@@ -320,7 +329,7 @@ def test_fetch_and_cache_request_exception(mock_api):
         mock_session_getter.return_value = mock_session
 
         with pytest.raises(requests.exceptions.RequestException):
-            atom.set_release("2024r-pp")
+            atom.set_release("2024r-pp", page_size=1)
 
     # Test 2: Empty response handling
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
@@ -646,3 +655,149 @@ def test_other_metadata_field_type():
     # Now try to get metadata for a field we don't use
     with pytest.raises(ValueError):
         atom.match_metadata("not_a_field", None)
+
+
+def test_count_endpoint_mock():
+    """Test that the count endpoint is properly mocked."""
+    from src.atlasopenmagic import metadata as md
+
+    # Get a session and make a request to the count endpoint
+    session = md._get_session()
+
+    # This should hit our mock
+    response = session.get(f"{md.API_BASE_URL}/datasets/count", params={"release_name": "2024r-pp"}, timeout=30)
+
+    # Verify the mock response
+    assert response.ok is True
+    count_data = response.json()
+    assert "count" in count_data
+    assert count_data["count"] == 3  # We have 3 datasets in MOCK_DATASETS
+
+    # Test without release filter
+    response_all = session.get(f"{md.API_BASE_URL}/datasets/count", timeout=30)
+    assert response_all.json()["count"] == 4  # ALL_MOCK_DATASETS has 4 (3 + 1 from 2020)
+
+
+def test_fetch_and_cache_handles_count_error():
+    """Test that _fetch_and_cache_release_data handles count endpoint errors gracefully."""
+    from src.atlasopenmagic import metadata as md
+
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+
+        # Mock count endpoint to fail
+        def failing_count(url, *args, **kwargs):
+            if "/datasets/count" in url:
+                raise Exception("Count endpoint failed")
+            # Return empty datasets
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.return_value = None
+            mock_resp.json.return_value = []
+            return mock_resp
+
+        mock_session.get.side_effect = failing_count
+        mock_session_getter.return_value = mock_session
+
+        # Should fall back to default estimate (10000)
+        # This tests the exception handling in lines you want to cover
+        atom.set_release("2024r-pp")
+
+        # Verify it completed without crashing
+        assert md.get_current_release() == "2024r-pp"
+
+
+def test_count_endpoint_returns_zero():
+    """Test handling when count endpoint returns 0."""
+
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+
+        def zero_count(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.return_value = None
+
+            if "/datasets/count" in url:
+                mock_resp.ok = True
+                mock_resp.json.return_value = {"count": 0}
+            else:
+                mock_resp.json.return_value = []
+
+            return mock_resp
+
+        mock_session.get.side_effect = zero_count
+        mock_session_getter.return_value = mock_session
+
+        # Should handle 0 count gracefully
+        atom.set_release("2024r-pp")
+        assert len(atom.available_datasets()) == 0
+
+
+def test_count_endpoint_not_ok():
+    """Test handling when count endpoint returns ok=False."""
+    from src.atlasopenmagic import metadata as md
+
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+
+        def not_ok_count(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.return_value = None
+
+            if "/datasets/count" in url:
+                mock_resp.ok = False  # Simulate failed response
+                # Should fallback to 10000
+            else:
+                mock_resp.json.return_value = []
+
+            return mock_resp
+
+        mock_session.get.side_effect = not_ok_count
+        mock_session_getter.return_value = mock_session
+
+        # Should use fallback count of 10000 but fetch 0 datasets
+        atom.set_release("2024r-pp")
+        # Since we return empty list, cache should be empty
+        assert len(md._metadata) == 0
+
+
+def test_get_all_info_empty_api_response():
+    """Test that get_all_info handles empty API response."""
+    from src.atlasopenmagic import metadata as md
+
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+
+        def empty_dataset_response(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.return_value = None
+
+            if "/metadata/" in url:
+                # Return empty/null response to trigger line 489
+                mock_resp.json.return_value = None  # or {}
+            else:
+                mock_resp.json.return_value = []
+
+            return mock_resp
+
+        mock_session.get.side_effect = empty_dataset_response
+        mock_session_getter.return_value = mock_session
+
+        # Clear cache to force API call
+        md.empty_metadata()
+
+        # Should raise ValueError with specific message about empty response
+        with pytest.raises(ValueError, match="API returned empty response"):
+            atom.get_all_info("999999")
+
+
+def test_get_all_info_cache_corruption():
+    """Test the final safety check when cache has None value."""
+    from src.atlasopenmagic import metadata as md
+
+    # Manually corrupt the cache by inserting None
+    with md._metadata_lock:
+        md._metadata["corrupted_key"] = None
+
+    # Should raise ValueError with "No dataset found" message
+    with pytest.raises(ValueError, match="No dataset found with this ID or name"):
+        atom.get_all_info("corrupted_key")
