@@ -205,7 +205,7 @@ def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
     return resp.json()
 
 
-def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_size: int = 1000) -> str:
+def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_size: int = 1000) -> None:
     """Fetch all datasets using batched parallel requests with a pooled Session."""
     global _metadata, AVAILABLE_FIELDS
     print(f"Fetching metadata for release: {release_name}...")
@@ -221,7 +221,7 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
         )
         total_datasets = count_response.json().get("count", 0) if count_response.ok else 10000
     except Exception:
-        total_datasets = 10000  # Fallback estimate
+        total_datasets = 10000  # Fallback estimate, more or less twice than our biggest release
 
     # Calculate number of pages needed
     num_pages = max(1, (total_datasets + page_size - 1) // page_size)
