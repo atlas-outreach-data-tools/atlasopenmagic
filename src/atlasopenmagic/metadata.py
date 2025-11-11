@@ -43,9 +43,7 @@ current_release = os.environ.get("ATLAS_RELEASE", "2024r-pp")
 # The API endpoint can be set via the 'ATLAS_API_BASE_URL' environment variable.
 # This allows pointing the client to different API instances (e.g.,
 # development, production).
-API_BASE_URL = os.environ.get(
-    "ATLAS_API_BASE_URL", "https://atlasopenmagic-rest-api-atlas-open-data.app.cern.ch"
-)
+API_BASE_URL = os.environ.get("ATLAS_API_BASE_URL", "https://atlasopenmagic-api.app.cern.ch")
 
 
 # The local cache to store metadata fetched from the API for the current release.
