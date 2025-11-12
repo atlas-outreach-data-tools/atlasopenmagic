@@ -17,10 +17,14 @@ metadata = atom.get_metadata('301204')
 # Get the file URLs for the 'exactly4lep' skim of that dataset
 urls = atom.get_urls('301204', skim='exactly4lep')
 print(urls)
+
+# Control output verbosity; default is 'info'
+atom.set_verbosity('error')  # or 'warning', 'info', 'debug'
 ```
 """
 
 
+import logging
 import os
 import threading
 import warnings
@@ -29,8 +33,24 @@ import warnings
 from typing import Any, Optional
 
 import requests
+from requests.adapters import HTTPAdapter, Retry
+from tqdm import tqdm
 
 # --- Global Configuration & State ---
+
+# Setup logging
+_logger = logging.getLogger("atlasopenmagic")
+_logger.setLevel(logging.DEBUG)  # Capture all levels, we'll filter in handlers
+
+# Create console handler with a nice format
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)  # Default: show INFO and above
+_formatter = logging.Formatter("%(message)s")  # Simple format for users
+_console_handler.setFormatter(_formatter)
+_logger.addHandler(_console_handler)
+
+# Prevent propagation to avoid duplicate messages
+_logger.propagate = False
 
 
 # The active release can be set via the 'ATLAS_RELEASE' environment variable.
@@ -41,9 +61,7 @@ current_release = os.environ.get("ATLAS_RELEASE", "2024r-pp")
 # The API endpoint can be set via the 'ATLAS_API_BASE_URL' environment variable.
 # This allows pointing the client to different API instances (e.g.,
 # development, production).
-API_BASE_URL = os.environ.get(
-    "ATLAS_API_BASE_URL", "https://atlasopenmagic-rest-api-atlas-open-data.app.cern.ch"
-)
+API_BASE_URL = os.environ.get("ATLAS_API_BASE_URL", "https://atlasopenmagic-api.app.cern.ch")
 
 
 # The local cache to store metadata fetched from the API for the current release.
@@ -148,72 +166,165 @@ def _apply_protocol(url: str, protocol: str) -> str:
     raise ValueError(f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
 
-def _fetch_and_cache_release_data(release_name: str) -> str:
-    """Internal helper to fetch all datasets for a release and populate the local cache.
+def _get_session() -> requests.Session:
+    """Reusable HTTP session with retries and connection pooling."""
+    global _session
+    try:
+        if _session is not None:
+            return _session
+    except NameError:
+        # _session wasn't defined yet; initialize it to None so we can create a new session below
+        _session = None
+
+    s = requests.Session()
+    retries = Retry(
+        total=5,
+        connect=3,
+        read=3,
+        backoff_factor=0.5,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retries, pool_connections=20, pool_maxsize=50)
+    s.mount("http://", adapter)
+    s.mount("https://", adapter)
+    s.headers.update(
+        {
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "User-Agent": "atlasopenmagic-client/1.0",
+        }
+    )
+    _session = s
+    return _session
+
+
+def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
+    """Fetch a single page of datasets using the shared HTTP session.
 
     This function uses the paginated `/datasets?release_name=...&skip=...&limit=...`
-    API endpoint to efficiently retrieve datasets in manageable batches, preventing
+    API endpoint to retrieve datasets in manageable batches, preventing
     memory and network issues that arise from very large releases.
 
     Args:
         release_name: The name of the release to fetch.
-
-    Raises:
-        requests.exceptions.RequestException: If the API call fails or returns an error.
+        skip: The number of records to skip (offset) for pagination.
+        page_size: The maximum number of records to return in this page.
     """
+    session = _get_session()
+    resp = session.get(
+        f"{API_BASE_URL}/datasets",
+        params={"release_name": release_name, "skip": skip, "limit": page_size},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def set_verbosity(level: str = "info") -> None:
+    """Control how much output atlasopenmagic shows.
+
+    Args:
+        level: Verbosity level, one of:
+            - 'error': Only show error messages
+            - 'warning' (default): Show progress and status messages
+            - 'info': Show detailed information
+            - 'debug': Show everything including debug information
+
+    Example:
+        >>> import atlasopenmagic as atom
+        >>> atom.set_verbosity('error')  # Minimal output
+        >>> atom.set_verbosity('info')  # Detailed output
+    """
+    level_map = {
+        "error": logging.ERROR,
+        "warning": logging.WARNING,
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+    }
+
+    level_lower = level.lower()
+    if level_lower not in level_map:
+        raise ValueError(f"Invalid verbosity level '{level}'. " f"Choose from: {', '.join(level_map.keys())}")
+
+    _console_handler.setLevel(level_map[level_lower])
+    _logger.debug(f"Verbosity set to '{level}'")
+
+
+def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_size: int = 1000) -> None:
+    """Fetch all datasets using batched parallel requests with a pooled Session."""
     global _metadata, AVAILABLE_FIELDS
-    print(f"Fetching and caching all metadata for release: {release_name}...")
+    _logger.info(f"Fetching metadata for release: {release_name}...")
 
-    page_size = 3000  # The number of datasets to fetch per API call, see https://github.com/atlas-outreach-data-tools/atlasopenmagic/pull/63
-    skip = 0  # Offset for pagination; incremented by page_size at each iteration
-    total_fetched = 0  # Counter to keep track of how many datasets have been cached
-    new_cache = {}  # Temporary cache for atomic update once all data is fetched
-    looper = 0  # Safety counter to prevent infinite loops
+    session = _get_session()
 
+    # Get total count first
     try:
-        while True:
-            looper += 1
-            if looper > 5:  # We do not expect to have more than 15000 datasets for now.
-                raise RuntimeError("Exceeded maximum number of pagination loops (5). Aborting fetch.")
-            response = requests.get(
-                f"{API_BASE_URL}/datasets",
-                params={"release_name": release_name, "skip": skip, "limit": page_size},
-                timeout=100,
-            )
-            response.raise_for_status()  # Raise for any HTTP error codes (4xx, 5xx)
-            datasets_page = response.json()
-            if not datasets_page:
-                break
-            # Now each dataset should be a dict
-            for dataset in datasets_page:
-                ds_number_str = str(dataset["dataset_number"])
-                new_cache[ds_number_str] = dataset
-                # Also cache by the physics short name, if available, for user convenience.
-                if dataset.get("physics_short"):
-                    new_cache[dataset["physics_short"].lower()] = dataset
+        count_response = session.get(
+            f"{API_BASE_URL}/datasets/count",
+            params={"release_name": release_name},
+            timeout=30,
+        )
+        total_datasets = count_response.json().get("count", 0) if count_response.ok else 10000
+    except Exception as e:
+        _logger.debug(f"Count endpoint failed: {e}. Using fallback estimate.")
+        total_datasets = 10000  # Fallback estimate, more or less twice than our biggest release
 
-            num_this_page = len(datasets_page)
-            total_fetched += num_this_page
-            print(f"Fetched {total_fetched} datasets so far...")
-            # Advance the skip marker for the next page.
-            skip += page_size
+    # Calculate number of pages needed
+    num_pages = max(1, (total_datasets + page_size - 1) // page_size)
+    page_offsets = [i * page_size for i in range(num_pages)]
 
-    except requests.exceptions.RequestException as e:
-        # Handle errors, timeouts, etc., and propagate the error up.
-        raise requests.exceptions.RequestException(
-            f"Failed to fetch metadata for release '{release_name}' from API: {e}"
-        ) from e
-    except RuntimeError as e:
-        raise RuntimeError(f"Failed to fetch metadata for release '{release_name}': {e}") from e
+    new_cache = {}
 
-    # Atomically replace the global cache with the newly populated one.
+    # Progress bar setup
+    pbar = (
+        tqdm(total=total_datasets, desc="Fetching datasets", unit="datasets") if "tqdm" in globals() else None
+    )
+
+    # Bound workers and fetch in batches to avoid flooding the API
+    workers = max(1, min(int(max_workers), 8))
+    try:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            for batch_start in range(0, len(page_offsets), workers):
+                batch = page_offsets[batch_start : batch_start + workers]
+                future_to_skip = {
+                    executor.submit(_fetch_page, release_name, skip, page_size): skip for skip in batch
+                }
+                for future in as_completed(future_to_skip):
+                    try:
+                        datasets_page = future.result()
+
+                        if not datasets_page:
+                            continue
+
+                        # Cache the datasets
+                        for dataset in datasets_page:
+                            ds_number_str = str(dataset["dataset_number"])
+                            new_cache[ds_number_str] = dataset
+                            if dataset.get("physics_short"):
+                                new_cache[dataset["physics_short"].lower()] = dataset
+
+                        # Update progress
+                        if pbar:
+                            pbar.update(len(datasets_page))
+
+                    except Exception as e:
+                        _logger.error(f"Error fetching page: {e}")
+                        raise e
+    finally:
+        if pbar:
+            pbar.close()
+
+    # Update global cache
     _metadata = new_cache
-    # Update available fields - get what's really there
     AVAILABLE_FIELDS = []
     for k in _metadata:
         AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
-    # Tell the users that we're done
-    print(f"Successfully cached {total_fetched} datasets.")
+
+    total_fetched = len([k for k in _metadata.keys() if k.isdigit() or k == "data"])
+    _logger.info(f"✓ Successfully cached {total_fetched} datasets.")
 
 
 # --- Public API Functions ---
@@ -273,7 +384,7 @@ def _convert_to_local(url: str, current_local_path: Optional[str] = None) -> str
     return os.path.join(current_local_path, rel)
 
 
-def set_release(release: str, local_path: Optional[str] = None) -> None:
+def set_release(release: str, local_path: Optional[str] = None, page_size: int = 1000) -> None:
     """Set the active data release for all subsequent API calls.
 
     Changing the release will clear the local metadata cache, forcing a re-fetch
@@ -284,6 +395,7 @@ def set_release(release: str, local_path: Optional[str] = None) -> None:
         local_path: A local directory path to use for caching dataset files.
             If provided, the client will assume that datasets are available locally
             at this path. Provide "eos" as the local_path to access using the native POSIX.
+        page_size: The number of records to retrieve at a time.
 
     Raises:
         ValueError: If the provided release name is not valid.
@@ -293,6 +405,9 @@ def set_release(release: str, local_path: Optional[str] = None) -> None:
         raise ValueError(f"Invalid release '{release}'. Use one of: {', '.join(RELEASES_DESC)}")
 
     with _metadata_lock:
+        # Check if we're actually changing releases
+        release_changed = current_release != release
+
         current_release = release
         if local_path:
             # Check if the local path exists
@@ -306,11 +421,15 @@ def set_release(release: str, local_path: Optional[str] = None) -> None:
         else:
             current_local_path = None  # disable local path
 
-        _metadata = {}  # Invalidate and clear the cache
-        # Fetch the data for the updated release and load it into the cache
-        _fetch_and_cache_release_data(current_release)
+        # Only clear cache and fetch if the release changed or cache is empty
+        if release_changed or not _metadata:
+            _metadata = {}  # Invalidate and clear the cache
+            # Fetch the data for the updated release and load it into the cache
+            _fetch_and_cache_release_data(current_release, page_size=page_size)
+        else:
+            _logger.info(f"Release '{release}' already active with cached metadata.")
 
-    print(
+    _logger.info(
         f"Active release: {current_release}. "
         f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})"
     )
@@ -407,7 +526,7 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
         len(_metadata[sample]["file_list"]) if sample in _metadata else 0 for sample in updated_samples
     )
 
-    print(
+    _logger.info(
         f"Metadata updated with local paths for {len(updated_samples)} samples "
         f"({updated_samples}) and {replaced_file_count} files "
         f"(out of {total_files_in_updated_samples} in those samples)."
@@ -433,20 +552,39 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
         ValueError: If the dataset key or the specified variable field is not found.
     """
     global _metadata
-    key_str = str(key).strip().lower()  # Normalize the key to a string for consistency
+    key_str = str(key).strip().lower()
 
     with _metadata_lock:
-        # Fetch-on-demand: If the cache is empty, populate it.
-        if not _metadata:
-            _fetch_and_cache_release_data(current_release)
+        # Check if we have this specific dataset cached
+        if key_str not in _metadata:
+            # Fetch just this one dataset from the API using the correct endpoint
+            try:
+                session = _get_session()
+                response = session.get(
+                    f"{API_BASE_URL}/metadata/{current_release}/{key_str}",
+                    timeout=30,
+                )
+                response.raise_for_status()
+                dataset = response.json()
 
-    # Retrieve the full dataset dictionary from the cache.
+                # Add validation here
+                if not dataset:
+                    raise ValueError(f"API returned empty response for dataset '{key_str}'")
+
+                _metadata[key_str] = dataset
+                # Also cache by physics_short if available (lowercased)
+                if dataset.get("physics_short"):
+                    _metadata[dataset["physics_short"].lower()] = dataset
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Dataset '{key_str}' not found in release '{current_release}': {e}") from e
+
     sample_data = _metadata.get(key_str)
 
+    # This check is still needed as a final safety net
     if not sample_data:
         raise ValueError(
-            f"Invalid key: '{key_str}'. \
-            No dataset found with this ID or name in release '{current_release}'."
+            f"Invalid key: '{key_str}'. "
+            f"No dataset found with this ID or name in release: '{current_release}'."
         )
 
     # If no specific variable is requested, return almost the whole dictionary.
@@ -708,7 +846,7 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
 
     # Tell the users explicitly in case there are no matches
     if len(matches) == 0:
-        print("No datasets found.")
+        _logger.info("No datasets found.")
     return sorted(matches)
 
 
@@ -776,7 +914,7 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
     global _metadata, current_release, AVAILABLE_FIELDS
 
     # Let the users know that we heard them
-    print(f"Loading metadata from {file_name}, and setting release to {release}")
+    _logger.info(f"Loading metadata from {file_name}, and setting release to {release}")
 
     # Lock it up so that no one else is writing to it at the moment
     with _metadata_lock:

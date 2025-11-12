@@ -22,6 +22,7 @@ from .metadata import (
     read_metadata,
     save_metadata,
     set_release,
+    set_verbosity,
 )
 from .utils import (
     build_data_dataset,
@@ -37,6 +38,7 @@ __all__ = [
     "available_skims",
     "get_metadata_fields",
     "set_release",
+    "set_verbosity",
     "find_all_files",
     "available_releases",
     "get_all_info",
