@@ -213,6 +213,10 @@ def mock_api():
 
         # Reset the release, which triggers fetching paginated and caching
         atom.set_release("2024r-pp")
+        atom.set_verbosity("debug")
+
+        with pytest.raises(ValueError, match="Invalid verbosity level"):
+            atom.set_verbosity("invalid_level")
 
         # Yield control to the test - patches remain active
         yield mock_session.get

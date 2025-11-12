@@ -17,10 +17,14 @@ metadata = atom.get_metadata('301204')
 # Get the file URLs for the 'exactly4lep' skim of that dataset
 urls = atom.get_urls('301204', skim='exactly4lep')
 print(urls)
+
+# Control output verbosity
+atom.set_verbosity('error')  # or 'warning', 'info', 'debug'
 ```
 """
 
 
+import logging
 import os
 import threading
 import warnings
@@ -33,6 +37,20 @@ from requests.adapters import HTTPAdapter, Retry
 from tqdm import tqdm
 
 # --- Global Configuration & State ---
+
+# Setup logging
+_logger = logging.getLogger("atlasopenmagic")
+_logger.setLevel(logging.DEBUG)  # Capture all levels, we'll filter in handlers
+
+# Create console handler with a nice format
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)  # Default: show INFO and above
+_formatter = logging.Formatter("%(message)s")  # Simple format for users
+_console_handler.setFormatter(_formatter)
+_logger.addHandler(_console_handler)
+
+# Prevent propagation to avoid duplicate messages
+_logger.propagate = False
 
 
 # The active release can be set via the 'ATLAS_RELEASE' environment variable.
@@ -203,10 +221,40 @@ def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
     return resp.json()
 
 
+def set_verbosity(level: str = "info") -> None:
+    """Control how much output atlasopenmagic shows.
+
+    Args:
+        level: Verbosity level, one of:
+            - 'error': Only show error messages
+            - 'warning' (default): Show progress and status messages
+            - 'info': Show detailed information
+            - 'debug': Show everything including debug information
+
+    Example:
+        >>> import atlasopenmagic as atom
+        >>> atom.set_verbosity('error')  # Minimal output
+        >>> atom.set_verbosity('info')  # Detailed output
+    """
+    level_map = {
+        "error": logging.ERROR,
+        "warning": logging.WARNING,
+        "info": logging.INFO,
+        "debug": logging.DEBUG,
+    }
+
+    level_lower = level.lower()
+    if level_lower not in level_map:
+        raise ValueError(f"Invalid verbosity level '{level}'. " f"Choose from: {', '.join(level_map.keys())}")
+
+    _console_handler.setLevel(level_map[level_lower])
+    _logger.debug(f"Verbosity set to '{level}'")
+
+
 def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_size: int = 1000) -> None:
     """Fetch all datasets using batched parallel requests with a pooled Session."""
     global _metadata, AVAILABLE_FIELDS
-    print(f"Fetching metadata for release: {release_name}...")
+    _logger.info(f"Fetching metadata for release: {release_name}...")
 
     session = _get_session()
 
@@ -218,7 +266,8 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
             timeout=30,
         )
         total_datasets = count_response.json().get("count", 0) if count_response.ok else 10000
-    except Exception:
+    except Exception as e:
+        _logger.debug(f"Count endpoint failed: {e}. Using fallback estimate.")
         total_datasets = 10000  # Fallback estimate, more or less twice than our biggest release
 
     # Calculate number of pages needed
@@ -262,7 +311,7 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
                             pbar.update(len(datasets_page))
 
                     except Exception as e:
-                        print(f"Error fetching page: {e}")
+                        _logger.error(f"Error fetching page: {e}")
                         raise e
     finally:
         if pbar:
@@ -275,7 +324,7 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
         AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
 
     total_fetched = len([k for k in _metadata.keys() if k.isdigit() or k == "data"])
-    print(f"✓ Successfully cached {total_fetched} datasets.")
+    _logger.info(f"✓ Successfully cached {total_fetched} datasets.")
 
 
 # --- Public API Functions ---
@@ -378,9 +427,9 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
             # Fetch the data for the updated release and load it into the cache
             _fetch_and_cache_release_data(current_release, page_size=page_size)
         else:
-            print(f"Release '{release}' already active with cached metadata.")
+            _logger.info(f"Release '{release}' already active with cached metadata.")
 
-    print(
+    _logger.info(
         f"Active release: {current_release}. "
         f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})"
     )
@@ -477,7 +526,7 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
         len(_metadata[sample]["file_list"]) if sample in _metadata else 0 for sample in updated_samples
     )
 
-    print(
+    _logger.info(
         f"Metadata updated with local paths for {len(updated_samples)} samples "
         f"({updated_samples}) and {replaced_file_count} files "
         f"(out of {total_files_in_updated_samples} in those samples)."
@@ -797,7 +846,7 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
 
     # Tell the users explicitly in case there are no matches
     if len(matches) == 0:
-        print("No datasets found.")
+        _logger.info("No datasets found.")
     return sorted(matches)
 
 
@@ -865,7 +914,7 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
     global _metadata, current_release, AVAILABLE_FIELDS
 
     # Let the users know that we heard them
-    print(f"Loading metadata from {file_name}, and setting release to {release}")
+    _logger.info(f"Loading metadata from {file_name}, and setting release to {release}")
 
     # Lock it up so that no one else is writing to it at the moment
     with _metadata_lock:
