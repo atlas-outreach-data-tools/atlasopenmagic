@@ -18,7 +18,7 @@ metadata = atom.get_metadata('301204')
 urls = atom.get_urls('301204', skim='exactly4lep')
 print(urls)
 
-# Control output verbosity
+# Control output verbosity; default is 'info'
 atom.set_verbosity('error')  # or 'warning', 'info', 'debug'
 ```
 """
