@@ -356,6 +356,9 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         raise ValueError(f"Invalid release '{release}'. Use one of: {', '.join(RELEASES_DESC)}")
 
     with _metadata_lock:
+        # Check if we're actually changing releases
+        release_changed = current_release != release
+
         current_release = release
         if local_path:
             # Check if the local path exists
@@ -369,9 +372,13 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         else:
             current_local_path = None  # disable local path
 
-        _metadata = {}  # Invalidate and clear the cache
-        # Fetch the data for the updated release and load it into the cache
-        _fetch_and_cache_release_data(current_release, page_size=page_size)
+        # Only clear cache and fetch if the release changed or cache is empty
+        if release_changed or not _metadata:
+            _metadata = {}  # Invalidate and clear the cache
+            # Fetch the data for the updated release and load it into the cache
+            _fetch_and_cache_release_data(current_release, page_size=page_size)
+        else:
+            print(f"Release '{release}' already active with cached metadata.")
 
     print(
         f"Active release: {current_release}. "
@@ -516,7 +523,7 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
                     raise ValueError(f"API returned empty response for dataset '{key_str}'")
 
                 _metadata[key_str] = dataset
-                # Also cache by physics_short if available
+                # Also cache by physics_short if available (lowercased)
                 if dataset.get("physics_short"):
                     _metadata[dataset["physics_short"].lower()] = dataset
             except requests.exceptions.RequestException as e:

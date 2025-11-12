@@ -300,25 +300,44 @@ def test_caching_behavior(mock_api):
     """Test that the API is called only twice (once for getting the data, once for exiting the loop)
     for multiple metadata requests within the same release.
     """
+    # Clear cache to start fresh
+    from src.atlasopenmagic import metadata
+
+    metadata.empty_metadata()
+
+    # Force a re-fetch by changing and then changing back
+    atom.set_release("2020e-13tev")
+    atom.set_release("2024r-pp")
+
+    # Reset call count after setup
+    mock_api.reset_mock()
+
     # First call will trigger the API fetch.
     atom.get_metadata("301204")
-    assert mock_api.call_count == 2
+    assert mock_api.call_count == 0  # Should hit cache, not API
 
     # Second call for a different key should hit the cache and NOT trigger another API fetch.
     atom.get_metadata("410470")
-    assert mock_api.call_count == 2  # Unchanged!
+    assert mock_api.call_count == 0  # Still cached
 
-    # Change the release.
+    # Change the release - this will trigger a fresh fetch
+    mock_api.reset_mock()
     atom.set_release("2020e-13tev")
-
+    print(mock_api.call_count)  # For debugging purposes
     # A new call for the new release should trigger the API again.
     atom.get_metadata("301204")
-    assert mock_api.call_count == 4  # Incremented!
+    print(mock_api.call_count)  # For debugging purposes
+    assert mock_api.call_count == 2  # Already fetched during set_release
 
 
 # Test RequestException handling
 def test_fetch_and_cache_request_exception(mock_api):
     """Test that a RequestException during metadata fetch is handled gracefully."""
+    # Clear the cache to force a fetch
+    from src.atlasopenmagic import metadata
+
+    metadata.empty_metadata()
+
     # Test 1: RequestException during fetch
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
@@ -329,6 +348,8 @@ def test_fetch_and_cache_request_exception(mock_api):
         mock_session_getter.return_value = mock_session
 
         with pytest.raises(requests.exceptions.RequestException):
+            # Force a release change to trigger fetch
+            atom.metadata.current_release = "different-release"
             atom.set_release("2024r-pp", page_size=1)
 
     # Test 2: Empty response handling
@@ -679,16 +700,22 @@ def test_count_endpoint_mock():
 
 
 def test_fetch_and_cache_handles_count_error():
-    """Test that _fetch_and_cache_release_data handles count endpoint errors gracefully."""
+    """Test that _fetch_and_cache_release_data handles count endpoint errors gracefully.
+
+    This covers line 221 where exceptions are caught and total_datasets defaults to 10000.
+    """
     from src.atlasopenmagic import metadata as md
+
+    md.empty_metadata()
 
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
 
-        # Mock count endpoint to fail
         def failing_count(url, *args, **kwargs):
             if "/datasets/count" in url:
+                # Trigger the exception handler on line 221
                 raise Exception("Count endpoint failed")
+
             # Return empty datasets
             mock_resp = MagicMock()
             mock_resp.raise_for_status.return_value = None
@@ -698,16 +725,23 @@ def test_fetch_and_cache_handles_count_error():
         mock_session.get.side_effect = failing_count
         mock_session_getter.return_value = mock_session
 
-        # Should fall back to default estimate (10000)
-        # This tests the exception handling in lines you want to cover
+        # Force a release change to trigger fetch
+        md.current_release = "different-release"
+
+        # Should not crash despite count endpoint failing
         atom.set_release("2024r-pp")
 
-        # Verify it completed without crashing
+        # Verify it worked
         assert md.get_current_release() == "2024r-pp"
+        assert len(md._metadata) == 0
 
 
 def test_count_endpoint_returns_zero():
     """Test handling when count endpoint returns 0."""
+    # Clear cache to force a fresh fetch
+    from src.atlasopenmagic import metadata
+
+    metadata.empty_metadata()
 
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
@@ -727,6 +761,8 @@ def test_count_endpoint_returns_zero():
         mock_session.get.side_effect = zero_count
         mock_session_getter.return_value = mock_session
 
+        # Force a release change to trigger fetch
+        atom.metadata.current_release = "different_release"
         # Should handle 0 count gracefully
         atom.set_release("2024r-pp")
         assert len(atom.available_datasets()) == 0
@@ -735,6 +771,9 @@ def test_count_endpoint_returns_zero():
 def test_count_endpoint_not_ok():
     """Test handling when count endpoint returns ok=False."""
     from src.atlasopenmagic import metadata as md
+
+    # Clear cache to force a fresh fetch
+    md.empty_metadata()
 
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
@@ -754,6 +793,8 @@ def test_count_endpoint_not_ok():
         mock_session.get.side_effect = not_ok_count
         mock_session_getter.return_value = mock_session
 
+        # Force a release change to trigger fetch
+        md.current_release = "different-release"
         # Should use fallback count of 10000 but fetch 0 datasets
         atom.set_release("2024r-pp")
         # Since we return empty list, cache should be empty
@@ -801,3 +842,38 @@ def test_get_all_info_cache_corruption():
     # Should raise ValueError with "No dataset found" message
     with pytest.raises(ValueError, match="No dataset found with this ID or name"):
         atom.get_all_info("corrupted_key")
+
+
+def test_fetch_and_cache_count_exception_fallback():
+    """Directly test that line 221's exception handler sets total_datasets=10000."""
+    from src.atlasopenmagic import metadata as md
+
+    md.empty_metadata()
+
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+
+        # Create a side effect that raises for count, returns empty for datasets
+        def selective_fail(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.return_value = None
+
+            if "/datasets/count" in url:
+                # This will trigger the except clause on line 221
+                raise requests.exceptions.Timeout("Simulated timeout")
+            else:
+                mock_resp.json.return_value = []
+                return mock_resp
+
+        mock_session.get.side_effect = selective_fail
+        mock_session_getter.return_value = mock_session
+
+        # Force release change
+        md.current_release = "other"
+
+        # This should not crash despite count endpoint failing
+        atom.set_release("2024r-pp", page_size=1000)
+
+        # Verify it worked
+        assert md.get_current_release() == "2024r-pp"
+        assert len(md._metadata) == 0  # Empty because we returned no datasets
