@@ -672,6 +672,10 @@ def get_urls(key: str, skim: str = "noskim", protocol: str = "root", cache: Opti
     for skim_obj in dataset.get("skims", []):
         available_files[skim_obj["skim_type"]] = skim_obj["file_list"]
 
+    # Check to see if any files are available at all, or if it's all just metadata
+    if len(available_files) == 0:
+        raise ValueError(f"Dataset '{key}' has no available files")
+
     # Check if the user-requested skim exists in our constructed dictionary.
     if skim not in available_files:
         available_skims = ", ".join(sorted(available_files.keys()))
