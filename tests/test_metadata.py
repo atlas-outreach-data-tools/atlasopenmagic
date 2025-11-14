@@ -82,6 +82,14 @@ MOCK_API_RESPONSE = {
             ],
             "release": {"name": "2024r-pp"},
         },
+        # Extra dataset with no available files
+        {
+            "dataset_number": "410471",
+            "CoMEnergy": None,
+            "physics_short": "ttbar_lep",
+            "cross_section_pb": 831.76,
+            "release": {"name": "2024r-pp"},
+        },
     ],
 }
 
@@ -441,6 +449,12 @@ def test_get_urls_different_protocols():
         assert atom.get_urls("301204", protocol="ftp")
 
 
+def test_get_urls_no_available_files():
+    """Test get URL functionality when no files are available in the dataset - raises a ValueError."""
+    with pytest.raises(ValueError, match="Dataset .*"):
+        atom.get_urls("410471")  # 410471 has no files
+
+
 # === Tests for other utility functions ===
 
 
@@ -461,7 +475,7 @@ def test_available_datasets():
 
     # Now see what datasets are available to us
     data = atom.available_datasets()
-    assert data == ["301204", "410470", "data"]
+    assert data == ["301204", "410470", "410471", "data"]
 
 
 def test_available_keywords():
@@ -696,11 +710,11 @@ def test_count_endpoint_mock():
     assert response.ok is True
     count_data = response.json()
     assert "count" in count_data
-    assert count_data["count"] == 3  # We have 3 datasets in MOCK_DATASETS
+    assert count_data["count"] == 4  # We have 4 datasets in MOCK_DATASETS
 
     # Test without release filter
     response_all = session.get(f"{md.API_BASE_URL}/datasets/count", timeout=30)
-    assert response_all.json()["count"] == 4  # ALL_MOCK_DATASETS has 4 (3 + 1 from 2020)
+    assert response_all.json()["count"] == 5  # ALL_MOCK_DATASETS has 5 (4 + 1 from 2020)
 
 
 def test_fetch_and_cache_handles_count_error():
