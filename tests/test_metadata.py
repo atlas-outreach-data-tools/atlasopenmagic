@@ -60,7 +60,9 @@ MOCK_API_RESPONSE = {
             "dataset_number": "410470",
             "CoMEnergy": None,
             "physics_short": "ttbar_lep",
+            "process": "pp>ttbar>dileptonic",
             "cross_section_pb": 831.76,
+            "keywords": ["top", "Alternative", "Powheg"],
             "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"],
             "skims": [],
             "release": {"name": "2024r-pp"},
@@ -526,6 +528,69 @@ def test_match_metadata():
     matched = atom.match_metadata("CoMEnergy", None)
     print(matched)  # For debugging purposes
     assert len(matched) > 0
+
+
+def test_match_metadata_and_logic():
+    """Test that match_metadata supports AND logic with list/tuple values."""
+    from src.atlasopenmagic import metadata
+
+    metadata.empty_metadata()
+
+    # Test AND matching with a list - should match dataset 410470 which has ["top", "Alternative", "Powheg"]
+    matched = atom.match_metadata("keywords", ["top", "Alternative"])
+    print(f"AND match ['top', 'Alternative']: {matched}")
+    assert isinstance(matched, list)
+    assert len(matched) == 1
+    assert matched[0][0] == "410470"
+
+    # Test AND matching with tuple - should also work
+    matched = atom.match_metadata("keywords", ("top", "Alternative"))
+    print(f"AND match ('top', 'Alternative'): {matched}")
+    assert isinstance(matched, list)
+    assert len(matched) == 1
+    assert matched[0][0] == "410470"
+
+    # Test AND matching with all three keywords
+    matched = atom.match_metadata("keywords", ["top", "Alternative", "Powheg"])
+    print(f"AND match all three: {matched}")
+    assert len(matched) == 1
+    assert matched[0][0] == "410470"
+
+    # Test AND matching where one keyword doesn't exist - should return empty
+    matched = atom.match_metadata("keywords", ["top", "NonExistent"])
+    print(f"AND match with nonexistent: {matched}")
+    assert len(matched) == 0
+
+    # Test that single value matching still works (backward compatibility)
+    matched = atom.match_metadata("keywords", "BSM")
+    print(f"Single value match 'BSM': {matched}")
+    assert len(matched) == 1
+    assert matched[0][0] == "301204"
+
+    # Test single value on dataset with multiple matching keywords
+    matched = atom.match_metadata("keywords", "top")
+    print(f"Single value match 'top': {matched}")
+    assert len(matched) == 1
+    assert matched[0][0] == "410470"
+
+    # Test AND matching on STRING fields (not just lists)
+    # Dataset 410470 has process="pp>ttbar>dileptonic"
+    matched = atom.match_metadata("process", ["ttbar", "dileptonic"])
+    print(f"AND match on string field ['ttbar', 'dileptonic']: {matched}")
+    assert isinstance(matched, list)
+    assert len(matched) == 1
+    assert matched[0][0] == "410470"
+
+    # Test AND matching on string field where one substring is missing
+    matched = atom.match_metadata("process", ["ttbar", "hadronic"])
+    print(f"AND match on string field with missing substring: {matched}")
+    assert len(matched) == 0
+
+    # Test single value matching on string field (backward compatibility)
+    matched = atom.match_metadata("process", "ttbar")
+    print(f"Single value match on string field 'ttbar': {matched}")
+    assert len(matched) == 1
+    assert matched[0][0] == "410470"
 
 
 def test_deprecated_get_urls_data():
