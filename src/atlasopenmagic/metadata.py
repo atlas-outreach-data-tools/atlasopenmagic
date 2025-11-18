@@ -804,7 +804,10 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
 
     Args:
         field: The metadata field to search.
-        value: The value to search for.
+        value: The value to search for. Can be:
+            - A single value (string, number, etc.) for simple matching
+            - A list or tuple of values for AND matching (all values must be present)
+              Example: value=['top', 'Alternative'] matches datasets with both keywords
         float_tolerance: The fractional tolerance for floating point number matches.
 
     Returns:
@@ -833,7 +836,18 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
         if field in metadata and metadata[field] is not None:
             # For strings allow matches of substrings and items in the lists
             if isinstance(metadata[field], (str, list)):
-                if value is not None and value in metadata[field]:
+                # Handle AND matching: if value is a list/tuple, check if ALL values are present
+                if isinstance(value, (list, tuple)):
+                    # For list fields, check if all search values are in the field
+                    if isinstance(metadata[field], list):
+                        if all(v in metadata[field] for v in value):
+                            matches += [k]
+                    # For string fields, check if all search values are substrings
+                    elif isinstance(metadata[field], str):
+                        if all(v in metadata[field] for v in value):
+                            matches += [k]
+                # Handle single value matching (original behavior)
+                elif value is not None and value in metadata[field]:
                     matches += [k]
             # For numbers that aren't zero, match within tolerance
             elif isinstance(metadata[field], float) and value is not None and float(value) != 0:
