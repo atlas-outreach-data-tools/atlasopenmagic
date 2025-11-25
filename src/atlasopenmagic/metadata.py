@@ -626,6 +626,21 @@ def get_metadata(key: str, var: Optional[str] = None) -> Any:
     return all_info
 
 
+def print_metadata(key: str) -> None:
+    """Pretty print the metadata dictionary for the given dataset.
+
+    Args:
+        key: The dataset identifier (e.g., '301204').
+
+    Raises:
+        ValueError: If the dataset key cannot be found.
+    """
+    # Direct pass through using prettyprint to print the dictionary in a nice format
+    import pprint
+
+    pprint.pp(get_metadata(key))
+
+
 def get_metadata_fields() -> list[str]:
     """Retrieve the list of available metadata fields.
 

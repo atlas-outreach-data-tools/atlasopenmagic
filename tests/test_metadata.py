@@ -457,6 +457,11 @@ def test_get_urls_no_available_files():
         atom.get_urls("410471")  # 410471 has no files
 
 
+def test_pretty_print_metadata():
+    """Test for pretty print functionality of metadata."""
+    atom.print_metadata("410471")
+
+
 # === Tests for other utility functions ===
 
 
