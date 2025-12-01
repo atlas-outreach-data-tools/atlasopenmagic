@@ -26,6 +26,7 @@ from .metadata import (
     set_verbosity,
 )
 from .utils import (
+    build_RDFspec,
     build_data_dataset,
     build_dataset,
     build_mc_dataset,
@@ -53,6 +54,7 @@ __all__ = [
     "read_metadata",
     "get_all_metadata",
     "install_from_environment",
+    "build_RDFspec",
     "build_dataset",
     "build_mc_dataset",
     "build_data_dataset",

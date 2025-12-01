@@ -613,6 +613,7 @@ def test_build_dataset():
     from src.atlasopenmagic import metadata as md
 
     md._session = None
+    atom.set_release("2025e-13tev-beta")
 
     # Original test code
     sample_defs = {
@@ -643,6 +644,21 @@ def test_build_dataset():
         dataset = atom.build_data_dataset("4lep")
         dataset = atom.build_mc_dataset(samples_defs_deprecated)
 
+    # Build the dataset
+    atom.set_release("2025e-13tev-beta")
+    dataset = atom.build_dataset(sample_defs, skim="4lep", protocol="root", rdf=True)
+
+    
+    # Check URLs for Sample1
+    print(dataset["samples"])  # For debugging purposes
+    assert dataset["samples"]["301204"]["files"] == ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"]
+    assert dataset["samples"]["301204"]["metadata"]["color"] == "blue"
+    assert dataset["samples"]["301204"]["trees"] == ["analysis"]
+
+    # Check URLs for Sample2
+    assert dataset["samples"]["data"]["files"] == ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"]
+    assert dataset["samples"]["data"]["metadata"]["color"] == "red"
+    assert dataset["samples"]["data"]["trees"] == ["analysis"]
 
 def test_find_all_files():
     """
