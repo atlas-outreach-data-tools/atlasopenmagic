@@ -16,7 +16,7 @@ from typing import Any, Optional
 import requests
 import yaml
 
-from atlasopenmagic.metadata import get_urls
+from .metadata import get_current_release, get_metadata, get_urls
 
 
 def install_from_environment(
@@ -152,6 +152,7 @@ def build_dataset(
     skim: str = "noskim",
     protocol: str = "https",
     cache: Optional[bool] = False,
+    rdf: Optional[bool] = False,
 ) -> dict[str, dict]:
     r"""Build a dict of MC samples URLs.
 
@@ -165,6 +166,9 @@ def build_dataset(
         cache: Use the simplecache mechanism of fsspec to locally cache
             files instead of streaming them. Default False means let
             atlasopenmagic decide what to do for that protocol.
+        rdf: Return a dictionary compatible with ROOT's ROOT.RDF.Experimental.FromSpec()
+            function used to define an RDataFrame with all the metadata needed to perform an analysis
+            on the Open Data
     Example:
     ```python
     import atlasopenmagic as atom
@@ -181,17 +185,53 @@ def build_dataset(
 
     Returns:
         A dictionary containing sample names as keys and dictionaries with 'list' of URLs
-        and optional 'color' as values.
+        and optional 'color' as values. If rdf=True it returns a dictionary on a form compatible with
+        ROOT.RDF.Experimental.FromSpec().
     """
-    out = {}
+    if not rdf:
+        out = {}
+        for name, info in samples_defs.items():
+            urls = []
+            for did in info["dids"]:
+                urls.extend(get_urls(str(did), skim=skim, protocol=protocol, cache=cache))
+            sample = {"list": urls}
+            if "color" in info:
+                sample["color"] = info["color"]
+            out[name] = sample
+        return out
+
+    out = {"samples": {}}
+
+    cr = get_current_release()
+    treenames = {
+        "2024r-pp": "CollectionTree",
+        "2024r-hi": "CollectionTree",
+        "2025e-13tev-beta": "analysis",
+        "2016e-8tev": "mini",
+        "2020e-13tev": "mini",
+    }
     for name, info in samples_defs.items():
         urls = []
+        metadata = {
+            "xsec": 1.0,
+            "sumOfWeights": 1.0,
+            "genFiltEff": 1.0,
+            "kFactor": 1.0,
+            "proc": name,
+            "color": info["color"],
+        }
         for did in info["dids"]:
-            urls.extend(get_urls(str(did), skim=skim, protocol=protocol, cache=cache))
-        sample = {"list": urls}
-        if "color" in info:
-            sample["color"] = info["color"]
-        out[name] = sample
+            if "data" not in did:
+                metadata["xsec"] = get_metadata(did, "cross_section_pb")
+                metadata["sumOfWeights"] = get_metadata(did, "sumOfWeights")
+                metadata["genFiltEff"] = get_metadata(did, "genFiltEff")
+                metadata["kFactor"] = get_metadata(did, "kFactor")
+            out["samples"][did] = {
+                "trees": [treenames[cr]],
+                "files": list(get_urls(str(did), skim=skim, protocol=protocol, cache=False)),
+                "metadata": metadata,
+            }
+
     return out
 
 
