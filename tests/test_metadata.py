@@ -109,8 +109,57 @@ MOCK_DATASETS_2020 = [
     }
 ]
 
+# Add mock datasets for the "2025e-13tev-beta" release
+MOCK_DATASETS_2025 = [
+    {
+        "dataset_number": "301204",
+        "physics_short": "Pythia8EvtGen_A14MSTW2008LO_Zprime_NoInt_ee_SSM3000",
+        "e_tag": "e3723",
+        "cross_section_pb": 0.001762,
+        "genFiltEff": 1.0,
+        "kFactor": 1.0,
+        "nEvents": 20000,
+        "sumOfWeights": 20000.0,
+        "sumOfWeightsSquared": 20000.0,
+        "process": "pp>Zprime>ee",
+        "generator": "Pythia8(v8.186)+EvtGen(v1.2.0)",
+        "keywords": ["2electron", "BSM", "SSM"],
+        "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/noskim_301204.root"],
+        "description": "Pythia 8 Zprime decaying to two electrons'",
+        "job_path": "https://gitlab.cern.ch/path/to/job/options",
+        "release": {"name": "2025e-13tev-beta"},
+        "skims": [
+            {
+                "id": 1,
+                "skim_type": "4lep",
+                "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"],
+                "description": "Exactly 4 leptons",
+                "dataset_number": "301204",
+                "release_name": "2025e-13tev-beta",
+            }
+        ],
+    },
+    {
+        "dataset_number": "data",
+        "physics_short": None,
+        "cross_section_pb": 831.76,
+        "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/ttbar.root"],
+        "skims": [
+            {
+                "id": 1,
+                "skim_type": "4lep",
+                "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"],
+                "description": "Exactly 4 leptons",
+                "dataset_number": "data",
+                "release_name": "2025e-13tev-beta",
+            }
+        ],
+        "release": {"name": "2025e-13tev-beta"},
+    },
+]
+
 # Combine all datasets for easier access
-ALL_MOCK_DATASETS = MOCK_DATASETS + MOCK_DATASETS_2020
+ALL_MOCK_DATASETS = MOCK_DATASETS + MOCK_DATASETS_2020 + MOCK_DATASETS_2025
 
 
 @pytest.fixture(autouse=True)
@@ -130,6 +179,8 @@ def mock_api():
             active_datasets = MOCK_DATASETS_2020
         elif release_filter == "2024r-pp":
             active_datasets = MOCK_DATASETS
+        elif release_filter == "2025e-13tev-beta":
+            active_datasets = MOCK_DATASETS_2025
         else:
             active_datasets = ALL_MOCK_DATASETS
 
@@ -153,6 +204,8 @@ def mock_api():
                     search_datasets = MOCK_DATASETS_2020
                 elif release_name == "2024r-pp":
                     search_datasets = MOCK_DATASETS
+                elif release_name == "2025e-13tev-beta":
+                    search_datasets = MOCK_DATASETS_2025
                 else:
                     search_datasets = ALL_MOCK_DATASETS
 
@@ -648,17 +701,21 @@ def test_build_dataset():
     atom.set_release("2025e-13tev-beta")
     dataset = atom.build_dataset(sample_defs, skim="4lep", protocol="root", rdf=True)
 
-    
     # Check URLs for Sample1
     print(dataset["samples"])  # For debugging purposes
-    assert dataset["samples"]["301204"]["files"] == ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"]
+    assert dataset["samples"]["301204"]["files"] == [
+        "root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_301204.root"
+    ]
     assert dataset["samples"]["301204"]["metadata"]["color"] == "blue"
     assert dataset["samples"]["301204"]["trees"] == ["analysis"]
 
     # Check URLs for Sample2
-    assert dataset["samples"]["data"]["files"] == ["root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"]
+    assert dataset["samples"]["data"]["files"] == [
+        "root://eospublic.cern.ch:1094//eos/path/to/4lep_skim_data.root"
+    ]
     assert dataset["samples"]["data"]["metadata"]["color"] == "red"
     assert dataset["samples"]["data"]["trees"] == ["analysis"]
+
 
 def test_find_all_files():
     """
@@ -800,7 +857,9 @@ def test_count_endpoint_mock():
 
     # Test without release filter
     response_all = session.get(f"{md.API_BASE_URL}/datasets/count", timeout=30)
-    assert response_all.json()["count"] == 5  # ALL_MOCK_DATASETS has 5 (4 + 1 from 2020)
+    assert (
+        response_all.json()["count"] == 7
+    )  # ALL_MOCK_DATASETS has 7 (4 from 2024r-pp + 1 from 2020 + 2 from 2025)
 
 
 def test_fetch_and_cache_handles_count_error():
