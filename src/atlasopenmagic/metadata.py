@@ -64,6 +64,10 @@ current_release = os.environ.get("ATLAS_RELEASE", "2024r-pp")
 API_BASE_URL = os.environ.get("ATLAS_API_BASE_URL", "https://atlasopenmagic-api.app.cern.ch")
 
 
+# Cache for weight metadata to avoid repeated API calls
+_weight_metadata = {}
+
+
 # The local cache to store metadata fetched from the API for the current release.
 # This dictionary is populated on the first call to get_metadata() for a
 # new release.
@@ -991,3 +995,155 @@ def get_urls_data(key: str, protocol: str = "root") -> list[str]:
         stacklevel=2,
     )
     return get_urls("data", skim=key, protocol=protocol)
+
+
+# --- Weight Metadata Functions ---
+
+
+def get_weights(key: str) -> dict[str, Any]:
+    """Retrieve weight metadata for a specific dataset in the current release.
+
+    This function fetches the list of available weight names for a given dataset
+    from the ATLAS Open Magic REST API. Weight metadata is useful for understanding
+    what systematic variations and PDF sets are available for Monte Carlo datasets.
+
+    Args:
+        key: The dataset identifier (e.g., '306600').
+
+    Returns:
+        A dictionary containing:
+            - release_name: The name of the release
+            - energy_level: The energy level (e.g., '13TeV', '13p6TeV')
+            - dataset_number: The dataset number
+            - weights: List of available weight names
+            - weight_count: Number of available weights
+
+    Raises:
+        ValueError: If the dataset is not found or weights are not available.
+        requests.exceptions.RequestException: If the API request fails.
+
+    Example:
+        >>> import atlasopenmagic as atom
+        >>> atom.set_release('2025r-evgen-13tev')
+        >>> weights = atom.get_weights('306600')
+        >>> print(f"Found {weights['weight_count']} weights")
+        >>> print(weights['weights'][:5])  # First 5 weight names
+    """
+    key_str = str(key).strip()
+    cache_key = f"{current_release}:{key_str}"
+
+    # Check cache first
+    if cache_key in _weight_metadata:
+        _logger.debug(f"Returning cached weights for {key_str}")
+        return _weight_metadata[cache_key]
+
+    _logger.info(f"Fetching weights for dataset {key_str} in release {current_release}")
+
+    try:
+        session = _get_session()
+        response = session.get(
+            f"{API_BASE_URL}/weights/{current_release}/{key_str}",
+            timeout=30,
+        )
+        response.raise_for_status()
+        weights_data = response.json()
+
+        # Cache the result
+        _weight_metadata[cache_key] = weights_data
+
+        _logger.info(f"Found {weights_data.get('weight_count', 0)} weights for dataset {key_str}")
+        return weights_data
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            raise ValueError(
+                f"Weights not found for dataset '{key_str}' in release '{current_release}'. "
+                "Weight metadata may not be available for this dataset or release."
+            ) from e
+        raise
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f"Failed to fetch weights for dataset '{key_str}': {e}") from e
+
+
+def get_weight_names(key: str) -> list[str]:
+    """Retrieve just the list of weight names for a dataset.
+
+    This is a convenience function that returns only the weight names,
+    without the additional metadata.
+
+    Args:
+        key: The dataset identifier (e.g., '306600').
+
+    Returns:
+        A list of weight names available for the dataset.
+
+    Raises:
+        ValueError: If the dataset is not found or weights are not available.
+
+    Example:
+        >>> import atlasopenmagic as atom
+        >>> atom.set_release('2025r-evgen-13tev')
+        >>> weight_names = atom.get_weight_names('306600')
+        >>> print(weight_names[:3])  # First 3 weight names
+    """
+    weights_data = get_weights(key)
+    return weights_data.get("weights", [])
+
+
+def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str, list[str]]:
+    """Retrieve all weight metadata for an entire release.
+
+    This function fetches weight information for all datasets in a release.
+    Note: This can be a large response depending on the release.
+
+    Args:
+        release_name: The name of the release. If None, uses the current release.
+
+    Returns:
+        A dictionary containing the release information and all datasets with their weights.
+
+    Raises:
+        ValueError: If the release is not found or weights are not available.
+        requests.exceptions.RequestException: If the API request fails.
+
+    Example:
+        >>> import atlasopenmagic as atom
+        >>> all_weights = atom.get_all_weights_for_release('2025r-evgen-13tev')
+        >>> print(f"Datasets with weights: {len(all_weights['datasets'])}")
+    """
+    release = release_name or current_release
+    cache_key = f"release:{release}"
+
+    # Check cache first
+    if cache_key in _weight_metadata:
+        _logger.debug(f"Returning cached weights for release {release}")
+        return _weight_metadata[cache_key]
+
+    _logger.info(f"Fetching all weights for release {release}")
+
+    try:
+        session = _get_session()
+        response = session.get(
+            f"{API_BASE_URL}/weights/{release}",
+            timeout=60,  # Longer timeout for potentially large response
+        )
+        response.raise_for_status()
+        weights_data = response.json()
+
+        # Cache the result
+        _weight_metadata[cache_key] = weights_data
+
+        dataset_count = len(weights_data.get("datasets", {}))
+        _logger.info(f"Found weights for {dataset_count} datasets in release {release}")
+        return weights_data
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            raise ValueError(
+                f"Weights not found for release '{release}'. "
+                "Weight metadata may not be available for this release."
+            ) from e
+        raise
+    except requests.exceptions.RequestException as e:
+        raise ValueError(f"Failed to fetch weights for release '{release}': {e}") from e
+
