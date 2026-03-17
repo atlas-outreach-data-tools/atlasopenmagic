@@ -3,6 +3,9 @@
 It includes functions to install packages from an environment file
 and to build datasets from sample definitions.
 """
+# pylint: disable=too-many-lines, logging-fstring-interpolation
+# pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-nested-blocks
+# pylint: disable=global-statement, broad-exception-caught, line-too-long
 
 
 import io

@@ -125,7 +125,7 @@ MOCK_DATASETS_2025 = [
         "physics_short": "test_2025_13p6_dataset",
         "cross_section_pb": 1.0,
         "release": {"name": "2025r-evgen-13p6tev"},
-    }
+    },
 ]
 
 # Combine all datasets for easier access
@@ -178,14 +178,16 @@ def mock_api():
         elif release_filter == "2024r-pp":
             active_datasets = MOCK_DATASETS
         elif release_filter and "2025r-evgen" in release_filter:
-            active_datasets = [d for d in MOCK_DATASETS_2025 if d.get("release", {}).get("name") == release_filter]
+            active_datasets = [
+                d for d in MOCK_DATASETS_2025 if d.get("release", {}).get("name") == release_filter
+            ]
         else:
             active_datasets = ALL_MOCK_DATASETS
 
         # Handle weight endpoints
         if "/weights/" in url:
             parts = url.split("/weights/")[-1].split("/")
-            
+
             # /weights/dsids/{dsids_list}
             if len(parts) >= 2 and parts[0] == "dsids":
                 dsids = parts[1].split(",")
@@ -199,16 +201,16 @@ def mock_api():
                         bulk_data[dsid_str] = {"e8515": MOCK_WEIGHT_METADATA_13P6TEV["weights"]}
                 mock_response.json.return_value = bulk_data
                 return mock_response
-            
+
             # /weights/dsid/{dataset_number} or /weights/dsid/{dataset_number}/tag/{e_tag}
             if len(parts) >= 2 and parts[0] == "dsid":
                 dataset_number = parts[1]
                 is_tag_endpoint = len(parts) >= 4 and parts[2] == "tag"
-                tag_name = parts[3] if is_tag_endpoint else None
-                
+                parts[3] if is_tag_endpoint else None
+
                 mock_response = MagicMock()
                 mock_response.raise_for_status.return_value = None
-                
+
                 if dataset_number == "306600":
                     if is_tag_endpoint:
                         mock_response.json.return_value = MOCK_WEIGHT_METADATA_13TEV["weights"]
@@ -216,7 +218,7 @@ def mock_api():
                         mock_response.json.return_value = {
                             "dsid": 306600,
                             "weights": {"e8514": MOCK_WEIGHT_METADATA_13TEV["weights"]},
-                            "count": 5
+                            "count": 5,
                         }
                     return mock_response
                 elif dataset_number == "525668":
@@ -226,7 +228,7 @@ def mock_api():
                         mock_response.json.return_value = {
                             "dsid": 525668,
                             "weights": {"e8515": MOCK_WEIGHT_METADATA_13P6TEV["weights"]},
-                            "count": 3
+                            "count": 3,
                         }
                     return mock_response
                 else:
@@ -310,7 +312,7 @@ def mock_api():
         if "/weights/bulk" in url:
             mock_response = MagicMock()
             mock_response.status_code = 200
-            
+
             dsids = json.get("dsids", []) if json else []
             bulk_data = {}
             for dsid in dsids:
@@ -319,10 +321,10 @@ def mock_api():
                     bulk_data[dsid_str] = {"e8514": MOCK_WEIGHT_METADATA_13TEV["weights"]}
                 elif dsid_str == "525668":
                     bulk_data[dsid_str] = {"e8515": MOCK_WEIGHT_METADATA_13P6TEV["weights"]}
-            
+
             mock_response.json.return_value = bulk_data
             return mock_response
-            
+
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {}
@@ -1107,11 +1109,11 @@ def test_get_weights_basic():
     # Temporarily override current_release for this test
     original_release = md.current_release
     md.current_release = "2025r-evgen-13tev"
-    
+
     try:
         # Get weights for dataset
         weights = atom.get_weights("306600")
-        
+
         assert weights["release_name"] == "2025r-evgen-13tev"
         assert weights["energy_level"] == "13TeV"
         assert weights["dataset_number"] == "306600"
@@ -1129,20 +1131,20 @@ def test_get_weights_cached():
 
     # Clear cache
     md._weight_metadata = {}
-    
+
     original_release = md.current_release
     md.current_release = "2025r-evgen-13tev"
-    
+
     try:
         # First call should hit API
         weights1 = atom.get_weights("306600")
-        
+
         # Second call should hit cache (verify by checking cache key exists)
         cache_key = f"{md.current_release}:306600"
         assert cache_key in md._weight_metadata
-        
+
         weights2 = atom.get_weights("306600")
-        
+
         # Should be the same object from cache
         assert weights1 == weights2
     finally:
@@ -1154,10 +1156,10 @@ def test_get_weights_not_found():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     original_release = md.current_release
     md.current_release = "2025r-evgen-13tev"
-    
+
     try:
         with pytest.raises(ValueError, match="Weights not found for dataset"):
             atom.get_weights("999999")
@@ -1170,7 +1172,7 @@ def test_get_weights_invalid_release():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     # Use current release (2024r-pp) which doesn't have weights
     with pytest.raises(ValueError, match="Weights not found for dataset"):
         atom.get_weights("301204")
@@ -1181,13 +1183,13 @@ def test_get_weight_names():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     original_release = md.current_release
     md.current_release = "2025r-evgen-13tev"
-    
+
     try:
         weight_names = atom.get_weight_names("306600")
-        
+
         assert isinstance(weight_names, list)
         assert len(weight_names) == 5
         assert "MEWeight" in weight_names
@@ -1201,9 +1203,9 @@ def test_get_all_weights_for_release():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     all_weights = atom.get_all_weights_for_release("2025r-evgen-13tev")
-    
+
     assert all_weights["release_name"] == "2025r-evgen-13tev"
     assert all_weights["energy_level"] == "13TeV"
     assert "datasets" in all_weights
@@ -1216,17 +1218,17 @@ def test_get_all_weights_for_release_cached():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     # First call
     all_weights1 = atom.get_all_weights_for_release("2025r-evgen-13tev")
-    
+
     # Check cache
     cache_key = "release:2025r-evgen-13tev"
     assert cache_key in md._weight_metadata
-    
+
     # Second call should use cache
     all_weights2 = atom.get_all_weights_for_release("2025r-evgen-13tev")
-    
+
     assert all_weights1 == all_weights2
 
 
@@ -1235,14 +1237,14 @@ def test_get_all_weights_current_release():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     original_release = md.current_release
     md.current_release = "2025r-evgen-13tev"
-    
+
     try:
         # Should use current release
         all_weights = atom.get_all_weights_for_release()
-        
+
         # Should use the mocked current_release
         assert all_weights["release_name"] == "2025r-evgen-13tev"
     finally:
@@ -1254,7 +1256,7 @@ def test_get_all_weights_release_not_found():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     with pytest.raises(ValueError, match="Weights not found for release"):
         atom.get_all_weights_for_release("invalid-release")
 
@@ -1264,7 +1266,7 @@ def test_get_all_weights_no_data():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     with pytest.raises(ValueError, match="Weights not found for release"):
         atom.get_all_weights_for_release("2020e-13tev")
 
@@ -1274,10 +1276,10 @@ def test_get_weights_request_exception():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     original_release = md.current_release
     md.current_release = "2025r-evgen-13tev"
-    
+
     try:
         with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
             mock_session = MagicMock()
@@ -1285,7 +1287,7 @@ def test_get_weights_request_exception():
             mock_resp.raise_for_status.side_effect = requests.exceptions.RequestException("Network error")
             mock_session.get.return_value = mock_resp
             mock_session_getter.return_value = mock_session
-            
+
             with pytest.raises(ValueError, match="Failed to fetch weights"):
                 atom.get_weights("306600")
     finally:
@@ -1297,14 +1299,14 @@ def test_get_all_weights_request_exception():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = requests.exceptions.RequestException("Network error")
         mock_session.get.return_value = mock_resp
         mock_session_getter.return_value = mock_session
-        
+
         with pytest.raises(ValueError, match="Failed to fetch weights"):
             atom.get_all_weights_for_release("2025r-evgen-13tev")
 
@@ -1314,13 +1316,13 @@ def test_get_weights_13p6tev():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     original_release = md.current_release
     md.current_release = "2025r-evgen-13p6tev"
-    
+
     try:
         weights = atom.get_weights("525668")
-        
+
         assert weights["release_name"] == "2025r-evgen-13p6tev"
         assert weights["energy_level"] == "13p6TeV"
         assert weights["dataset_number"] == "525668"
@@ -1335,9 +1337,9 @@ def test_get_all_weights_13p6tev():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     all_weights = atom.get_all_weights_for_release("2025r-evgen-13p6tev")
-    
+
     assert all_weights["release_name"] == "2025r-evgen-13p6tev"
     assert all_weights["energy_level"] == "13p6TeV"
     assert "525668" in all_weights["datasets"]
@@ -1348,25 +1350,25 @@ def test_get_weights_http_error_non_404():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     original_release = md.current_release
     md.current_release = "2025r-evgen-13tev"
-    
+
     try:
         with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
             mock_session = MagicMock()
             mock_resp = MagicMock()
-            
+
             # Create a 500 error (not 404)
             error_response = MagicMock()
             error_response.status_code = 500
             http_error = requests.exceptions.HTTPError("500 Server Error")
             http_error.response = error_response
             mock_resp.raise_for_status.side_effect = http_error
-            
+
             mock_session.get.return_value = mock_resp
             mock_session_getter.return_value = mock_session
-            
+
             # Should re-raise the HTTPError (not convert to ValueError)
             with pytest.raises(requests.exceptions.HTTPError):
                 atom.get_weights("306600")
@@ -1379,21 +1381,21 @@ def test_get_all_weights_http_error_non_404():
     from src.atlasopenmagic import metadata as md
 
     md._weight_metadata = {}
-    
+
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
         mock_resp = MagicMock()
-        
+
         # Create a 503 error (not 404)
         error_response = MagicMock()
         error_response.status_code = 503
         http_error = requests.exceptions.HTTPError("503 Service Unavailable")
         http_error.response = error_response
         mock_resp.raise_for_status.side_effect = http_error
-        
+
         mock_session.get.return_value = mock_resp
         mock_session_getter.return_value = mock_session
-        
+
         # Should re-raise the HTTPError (not convert to ValueError)
         with pytest.raises(requests.exceptions.HTTPError):
             atom.get_all_weights_for_release("2025r-evgen-13tev")
@@ -1402,16 +1404,22 @@ def test_get_all_weights_http_error_non_404():
 def test_get_weights_no_etag():
     """Test weight retrieval when e_tag is missing from metadata."""
     from src.atlasopenmagic import metadata as md
+
     md._weight_metadata = {}
-    
+
     with patch("src.atlasopenmagic.metadata.get_metadata") as mock_get_metadata:
+
         def mock_gm_side_effect(key, var=None):
-            if var == "dataset_number": return "306600"
-            if var == "e_tag": return None  # Missing e_tag
-            if var == "CoMEnergy": return "13TeV"
+            if var == "dataset_number":
+                return "306600"
+            if var == "e_tag":
+                return None  # Missing e_tag
+            if var == "CoMEnergy":
+                return "13TeV"
             return None
+
         mock_get_metadata.side_effect = mock_gm_side_effect
-        
+
         weights = atom.get_weights("306600")
         assert weights["dataset_number"] == "306600"
         assert weights["weight_count"] == 5
@@ -1420,25 +1428,30 @@ def test_get_weights_no_etag():
 def test_get_all_weights_invalid_dataset_format():
     """Test when dataset fetch returns non-dictionary values."""
     from src.atlasopenmagic import metadata as md
+
     md._weight_metadata = {}
-    
+
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
-        
+
         def mock_get_side_effect(url, *args, **kwargs):
             mock_resp = MagicMock()
             if "datasets" in url:
                 # Include a string and an integer instead of a dict to trigger Exception
-                mock_resp.json.return_value = ["not_a_dict", 123, {"dataset_number": "306600", "e_tag": "e8514", "CoMEnergy": "13TeV"}]
+                mock_resp.json.return_value = [
+                    "not_a_dict",
+                    123,
+                    {"dataset_number": "306600", "e_tag": "e8514", "CoMEnergy": "13TeV"},
+                ]
                 return mock_resp
             if "dsids" in url:
                 mock_resp.json.return_value = {"306600": {"e8514": ["w1", "w2"]}}
                 return mock_resp
             return mock_resp
-            
+
         mock_session.get.side_effect = mock_get_side_effect
         mock_session_getter.return_value = mock_session
-        
+
         res = atom.get_all_weights_for_release("2025r-evgen-13tev")
         assert "306600" in res["datasets"]
 
@@ -1446,25 +1459,28 @@ def test_get_all_weights_invalid_dataset_format():
 def test_get_all_weights_bulk_fallback_tag():
     """Test when bulk API returns different e_tag than expected."""
     from src.atlasopenmagic import metadata as md
+
     md._weight_metadata = {}
-    
+
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
-        
+
         def mock_get_side_effect(url, *args, **kwargs):
             mock_resp = MagicMock()
             if "datasets" in url:
-                mock_resp.json.return_value = [{"dataset_number": "306600", "e_tag": "e8514", "CoMEnergy": "13TeV"}]
+                mock_resp.json.return_value = [
+                    {"dataset_number": "306600", "e_tag": "e8514", "CoMEnergy": "13TeV"}
+                ]
                 return mock_resp
             if "dsids" in url:
                 # API returns a different tag
                 mock_resp.json.return_value = {"306600": {"wrong_tag": ["w1", "w2"]}}
                 return mock_resp
             return mock_resp
-            
+
         mock_session.get.side_effect = mock_get_side_effect
         mock_session_getter.return_value = mock_session
-        
+
         res = atom.get_all_weights_for_release("2025r-evgen-13tev")
         assert "306600" in res["datasets"]
         assert len(res["datasets"]["306600"]) == 2
@@ -1473,17 +1489,18 @@ def test_get_all_weights_bulk_fallback_tag():
 def test_get_all_weights_http_error_404():
     """Test handling of 404 HTTPError in get_all_weights_for_release."""
     from src.atlasopenmagic import metadata as md
+
     md._weight_metadata = {}
-    
+
     with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
         mock_session = MagicMock()
-        
+
         def mock_get_side_effect(url, *args, **kwargs):
             mock_resp = MagicMock()
             if "datasets" in url:
                 mock_resp.json.return_value = [{"dataset_number": "306600", "e_tag": "e8514"}]
                 return mock_resp
-            
+
             error_response = MagicMock()
             error_response.status_code = 404
             http_error = requests.exceptions.HTTPError("404 Not Found")
@@ -1493,8 +1510,6 @@ def test_get_all_weights_http_error_404():
 
         mock_session.get.side_effect = mock_get_side_effect
         mock_session_getter.return_value = mock_session
-        
+
         with pytest.raises(ValueError, match="Weights not found for release"):
             atom.get_all_weights_for_release("2025r-evgen-13tev")
-
-

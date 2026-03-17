@@ -23,9 +23,14 @@ atom.set_verbosity('error')  # or 'warning', 'info', 'debug'
 ```
 """
 
+# pylint: disable=too-many-lines, logging-fstring-interpolation
+# pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-nested-blocks
+# pylint: disable=global-statement, broad-exception-caught
 
+import json
 import logging
 import os
+import pprint
 import threading
 import warnings
 
@@ -81,7 +86,10 @@ _metadata_lock = threading.Lock()
 
 
 # The local path for caching dataset files, if set.
-current_local_path = None
+current_local_path = None  # pylint: disable=invalid-name
+
+# Global HTTP Session
+_session = None
 
 
 # A user-friendly dictionary describing the available data releases.
@@ -364,29 +372,29 @@ def get_current_release() -> str:
     return current_release
 
 
-def _convert_to_local(url: str, current_local_path: Optional[str] = None) -> str:
+def _convert_to_local(url: str, local_path: Optional[str] = None) -> str:
     """Convert to a local file path if one is set for the current release.
 
     Args:
         url: The URL to convert.
-        current_local_path: The current local path setting.
+        local_path: The current local path setting.
 
     Returns:
         The converted local path or original URL if no local path is set.
     """
-    if not current_local_path:
+    if not local_path:
         return url  # No local mode active
-    if url.startswith(current_local_path):
+    if url.startswith(local_path):
         return url  # Already local
     # remove protocol and hostname, keep relative EOS path:
-    if current_local_path == "eos":
+    if local_path == "eos":
         # Special case for EOS: just return the path
         return os.path.join("/eos/", url.split("eos/", 1)[-1])
 
     rel = url.split(
         "/",
     )[-1]
-    return os.path.join(current_local_path, rel)
+    return os.path.join(local_path, rel)
 
 
 def set_release(release: str, local_path: Optional[str] = None, page_size: int = 1000) -> None:
@@ -698,13 +706,13 @@ def get_urls(key: str, skim: str = "noskim", protocol: str = "root", cache: Opti
 
     # Check if the user-requested skim exists in our constructed dictionary.
     if skim not in available_files:
-        available_skims = ", ".join(sorted(available_files.keys()))
-        if available_skims == "noskim":
+        avail_skims_str = ", ".join(sorted(available_files.keys()))
+        if avail_skims_str == "noskim":
             raise ValueError(
                 f"Dataset '{key}' only has the base (unskimmed) version available.\n \
                 Are you sure that this release ({current_release}) has skimmed datasets?"
             )
-        raise ValueError(f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
+        raise ValueError(f"Skim '{skim}' not found for dataset '{key}'. Available skims: {avail_skims_str}")
 
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
@@ -911,9 +919,7 @@ def save_metadata(file_name: str = "metadata.json") -> None:
 
     # If they request json file saving, we have a very easy time
     if file_name.endswith(".json"):
-        import json
-
-        with open(file_name, "w") as outfile:
+        with open(file_name, "w", encoding="utf-8") as outfile:
             json.dump(
                 _metadata,
                 outfile,
@@ -924,10 +930,8 @@ def save_metadata(file_name: str = "metadata.json") -> None:
             )
     # If they want text files, just use pretty print
     elif file_name.endswith(".txt"):
-        import pprint
-
-        with open(file_name, "w") as outfile:
-            pprint.pprint(_metadata, outfile, indent=2)
+        with open(file_name, "w", encoding="utf-8") as outfile:
+            pprint.pprint(_metadata, stream=outfile, indent=2)
     # No other formats supported at this time
     else:
         raise ValueError(
@@ -957,9 +961,7 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
     # Lock it up so that no one else is writing to it at the moment
     with _metadata_lock:
         # Now load the metadata. We'll take it all, directly, just like we saved it above
-        import json
-
-        with open(file_name) as input_metadata:
+        with open(file_name, encoding="utf-8") as input_metadata:
             my_metadata = json.load(input_metadata)
             if not isinstance(my_metadata, dict):
                 raise ValueError(f"Did not get expected dictionary from {file_name}. Will not load metadata.")
@@ -1010,7 +1012,7 @@ def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
 
     Args:
         key: The dataset identifier (e.g., '306600').
-        e_tag: An optional specific e_tag to query. If not provided, it will 
+        e_tag: An optional specific e_tag to query. If not provided, it will
                attempt to automatically resolve it from the dataset's metadata.
 
     Returns:
@@ -1044,7 +1046,7 @@ def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
 
     try:
         session = _get_session()
-        
+
         # We need to get the specific e_tag for the dataset if not optionally provided
         try:
             resolved_e_tag = e_tag or get_metadata(key_str, "e_tag")
@@ -1052,7 +1054,7 @@ def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
         except Exception:
             resolved_e_tag = e_tag
             energy = "13TeV"
-            
+
         if resolved_e_tag:
             url = f"{PMG_WEIGHTS_API_URL}/weights/dsid/{key_str}/tag/{resolved_e_tag}"
             response = session.get(url, timeout=30)
@@ -1066,13 +1068,13 @@ def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
             weights_dict = data.get("weights", {})
             # just take the first list if e_tag is not provided or not matched exactly
             weight_list = list(weights_dict.values())[0] if weights_dict else []
-        
+
         weights_data = {
             "release_name": current_release,
             "energy_level": energy,
             "dataset_number": key_str,
             "weights": weight_list,
-            "weight_count": len(weight_list)
+            "weight_count": len(weight_list),
         }
 
         # Cache the result
@@ -1159,10 +1161,12 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
 
         # Collect datasets and their specific tags
         valid_datasets = []
-        
+
         # If the requested release is current_release, we could use available_datasets(),
         # but to be totally consistent and ensure we get proper dict data, we fetch it:
-        ds_resp = session.get(f"{API_BASE_URL}/datasets", params={"release_name": release, "limit": 5000}, timeout=120)
+        ds_resp = session.get(
+            f"{API_BASE_URL}/datasets", params={"release_name": release, "limit": 5000}, timeout=120
+        )
         ds_resp.raise_for_status()
         datasets_data = ds_resp.json()
 
@@ -1191,7 +1195,7 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
         try:
             for i in range(0, total_ds, chunk_size):
                 chunk = valid_datasets[i : i + chunk_size]
-                chunk_dsids = [ds["dsid"] for ds in chunk]
+                [ds["dsid"] for ds in chunk]
                 dsid_to_etag = {str(ds["dsid"]): ds["e_tag"] for ds in chunk}
 
                 dsids_str = ",".join(str(ds["dsid"]) for ds in chunk)
@@ -1219,14 +1223,12 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
             if pbar:
                 pbar.close()
 
-        result = {
-            "release_name": release,
-            "energy_level": release_energy,
-            "datasets": all_datasets
-        }
+        result = {"release_name": release, "energy_level": release_energy, "datasets": all_datasets}
 
         if not all_datasets:
-            raise ValueError(f"Weights not found for release '{release}'. Weight metadata may not be available for this release.")
+            raise ValueError(
+                f"Weights not found for release '{release}'. Weights may not be available for this release."
+            )
 
         # Cache the result
         _weight_metadata[cache_key] = result
@@ -1244,4 +1246,3 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
         raise
     except requests.exceptions.RequestException as e:
         raise ValueError(f"Failed to fetch weights for release '{release}': {e}") from e
-
