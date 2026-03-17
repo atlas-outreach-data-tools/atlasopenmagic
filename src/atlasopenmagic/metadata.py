@@ -62,6 +62,7 @@ current_release = os.environ.get("ATLAS_RELEASE", "2024r-pp")
 # This allows pointing the client to different API instances (e.g.,
 # development, production).
 API_BASE_URL = os.environ.get("ATLAS_API_BASE_URL", "https://atlasopenmagic-api.app.cern.ch")
+PMG_WEIGHTS_API_URL = os.environ.get("PMG_WEIGHTS_API_URL", "https://atlas-pmg-api.app.cern.ch")
 
 
 # Cache for weight metadata to avoid repeated API calls
@@ -1000,7 +1001,7 @@ def get_urls_data(key: str, protocol: str = "root") -> list[str]:
 # --- Weight Metadata Functions ---
 
 
-def get_weights(key: str) -> dict[str, Any]:
+def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
     """Retrieve weight metadata for a specific dataset in the current release.
 
     This function fetches the list of available weight names for a given dataset
@@ -1009,6 +1010,8 @@ def get_weights(key: str) -> dict[str, Any]:
 
     Args:
         key: The dataset identifier (e.g., '306600').
+        e_tag: An optional specific e_tag to query. If not provided, it will 
+               attempt to automatically resolve it from the dataset's metadata.
 
     Returns:
         A dictionary containing:
@@ -1025,12 +1028,12 @@ def get_weights(key: str) -> dict[str, Any]:
     Example:
         >>> import atlasopenmagic as atom
         >>> atom.set_release('2025r-evgen-13tev')
-        >>> weights = atom.get_weights('306600')
+        >>> weights = atom.get_weights('306600', e_tag='e8514')
         >>> print(f"Found {weights['weight_count']} weights")
         >>> print(weights['weights'][:5])  # First 5 weight names
     """
     key_str = str(key).strip()
-    cache_key = f"{current_release}:{key_str}"
+    cache_key = f"{current_release}:{key_str}:{e_tag}" if e_tag else f"{current_release}:{key_str}"
 
     # Check cache first
     if cache_key in _weight_metadata:
@@ -1041,17 +1044,41 @@ def get_weights(key: str) -> dict[str, Any]:
 
     try:
         session = _get_session()
-        response = session.get(
-            f"{API_BASE_URL}/weights/{current_release}/{key_str}",
-            timeout=30,
-        )
-        response.raise_for_status()
-        weights_data = response.json()
+        
+        # We need to get the specific e_tag for the dataset if not optionally provided
+        try:
+            resolved_e_tag = e_tag or get_metadata(key_str, "e_tag")
+            energy = get_metadata(key_str, "CoMEnergy") or "13TeV"
+        except Exception:
+            resolved_e_tag = e_tag
+            energy = "13TeV"
+            
+        if resolved_e_tag:
+            url = f"{PMG_WEIGHTS_API_URL}/weights/dsid/{key_str}/tag/{resolved_e_tag}"
+            response = session.get(url, timeout=30)
+            response.raise_for_status()
+            weight_list = response.json()
+        else:
+            url = f"{PMG_WEIGHTS_API_URL}/weights/dsid/{key_str}"
+            response = session.get(url, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            weights_dict = data.get("weights", {})
+            # just take the first list if e_tag is not provided or not matched exactly
+            weight_list = list(weights_dict.values())[0] if weights_dict else []
+        
+        weights_data = {
+            "release_name": current_release,
+            "energy_level": energy,
+            "dataset_number": key_str,
+            "weights": weight_list,
+            "weight_count": len(weight_list)
+        }
 
         # Cache the result
         _weight_metadata[cache_key] = weights_data
 
-        _logger.info(f"Found {weights_data.get('weight_count', 0)} weights for dataset {key_str}")
+        _logger.info(f"Found {len(weight_list)} weights for dataset {key_str}")
         return weights_data
 
     except requests.exceptions.HTTPError as e:
@@ -1065,7 +1092,7 @@ def get_weights(key: str) -> dict[str, Any]:
         raise ValueError(f"Failed to fetch weights for dataset '{key_str}': {e}") from e
 
 
-def get_weight_names(key: str) -> list[str]:
+def get_weight_names(key: str, e_tag: Optional[str] = None) -> list[str]:
     """Retrieve just the list of weight names for a dataset.
 
     This is a convenience function that returns only the weight names,
@@ -1073,6 +1100,7 @@ def get_weight_names(key: str) -> list[str]:
 
     Args:
         key: The dataset identifier (e.g., '306600').
+        e_tag: An optional specific e_tag to query.
 
     Returns:
         A list of weight names available for the dataset.
@@ -1083,10 +1111,10 @@ def get_weight_names(key: str) -> list[str]:
     Example:
         >>> import atlasopenmagic as atom
         >>> atom.set_release('2025r-evgen-13tev')
-        >>> weight_names = atom.get_weight_names('306600')
+        >>> weight_names = atom.get_weight_names('306600', e_tag='e8514')
         >>> print(weight_names[:3])  # First 3 weight names
     """
-    weights_data = get_weights(key)
+    weights_data = get_weights(key, e_tag=e_tag)
     return weights_data.get("weights", [])
 
 
@@ -1123,19 +1151,89 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
 
     try:
         session = _get_session()
-        response = session.get(
-            f"{API_BASE_URL}/weights/{release}",
-            timeout=60,  # Longer timeout for potentially large response
+        # Fallback implementation as PMG weight DB doesn't have a release-wide endpoint
+        _logger.warning("Retrieving all weights using bulk endpoint.")
+
+        all_datasets = {}
+        release_energy = "13TeV"  # default fallback
+
+        # Collect datasets and their specific tags
+        valid_datasets = []
+        
+        # If the requested release is current_release, we could use available_datasets(),
+        # but to be totally consistent and ensure we get proper dict data, we fetch it:
+        ds_resp = session.get(f"{API_BASE_URL}/datasets", params={"release_name": release, "limit": 5000}, timeout=120)
+        ds_resp.raise_for_status()
+        datasets_data = ds_resp.json()
+
+        for ds in datasets_data:
+            try:
+                dsid = ds.get("dataset_number")
+                e_tag = ds.get("e_tag")
+                energy = ds.get("CoMEnergy") or "13TeV"
+                if dsid:
+                    valid_datasets.append({"dsid": int(dsid), "e_tag": e_tag, "energy": energy})
+            except Exception:
+                continue
+
+        if valid_datasets:
+            release_energy = valid_datasets[0]["energy"]
+
+        total_ds = len(valid_datasets)
+        chunk_size = 500  # Bulk API expects a max around 900 for SQLite
+
+        pbar = (
+            tqdm(total=total_ds, desc=f"Fetching weights for {release}", unit="datasets")
+            if "tqdm" in globals()
+            else None
         )
-        response.raise_for_status()
-        weights_data = response.json()
+
+        try:
+            for i in range(0, total_ds, chunk_size):
+                chunk = valid_datasets[i : i + chunk_size]
+                chunk_dsids = [ds["dsid"] for ds in chunk]
+                dsid_to_etag = {str(ds["dsid"]): ds["e_tag"] for ds in chunk}
+
+                dsids_str = ",".join(str(ds["dsid"]) for ds in chunk)
+
+                resp = session.get(
+                    f"{PMG_WEIGHTS_API_URL}/weights/dsids/{dsids_str}",
+                    timeout=120,
+                )
+                resp.raise_for_status()
+
+                bulk_data = resp.json()
+
+                for dsid_str, e_tags_weights in bulk_data.items():
+                    expected_tag = dsid_to_etag.get(dsid_str)
+                    # Specific e_tag found
+                    if expected_tag and expected_tag in e_tags_weights:
+                        all_datasets[dsid_str] = e_tags_weights[expected_tag]
+                    # Otherwise fall back to whatever first tag we have
+                    elif e_tags_weights:
+                        all_datasets[dsid_str] = list(e_tags_weights.values())[0]
+
+                if pbar:
+                    pbar.update(len(chunk))
+        finally:
+            if pbar:
+                pbar.close()
+
+        result = {
+            "release_name": release,
+            "energy_level": release_energy,
+            "datasets": all_datasets
+        }
+
+        if not all_datasets:
+            raise ValueError(f"Weights not found for release '{release}'. Weight metadata may not be available for this release.")
 
         # Cache the result
-        _weight_metadata[cache_key] = weights_data
+        _weight_metadata[cache_key] = result
 
-        dataset_count = len(weights_data.get("datasets", {}))
+        dataset_count = len(all_datasets)
         _logger.info(f"Found weights for {dataset_count} datasets in release {release}")
-        return weights_data
+        return result
 
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:

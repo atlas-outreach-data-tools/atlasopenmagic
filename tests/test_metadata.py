@@ -109,8 +109,27 @@ MOCK_DATASETS_2020 = [
     }
 ]
 
+MOCK_DATASETS_2025 = [
+    {
+        "dataset_number": "306600",
+        "CoMEnergy": "13TeV",
+        "e_tag": "e8514",
+        "physics_short": "test_2025_dataset",
+        "cross_section_pb": 1.0,
+        "release": {"name": "2025r-evgen-13tev"},
+    },
+    {
+        "dataset_number": "525668",
+        "CoMEnergy": "13p6TeV",
+        "e_tag": "e8515",
+        "physics_short": "test_2025_13p6_dataset",
+        "cross_section_pb": 1.0,
+        "release": {"name": "2025r-evgen-13p6tev"},
+    }
+]
+
 # Combine all datasets for easier access
-ALL_MOCK_DATASETS = MOCK_DATASETS + MOCK_DATASETS_2020
+ALL_MOCK_DATASETS = MOCK_DATASETS + MOCK_DATASETS_2020 + MOCK_DATASETS_2025
 
 # Mock weight metadata responses
 MOCK_WEIGHT_METADATA_13TEV = {
@@ -154,8 +173,12 @@ def mock_api():
 
         if release_filter == "2020e-13tev":
             active_datasets = MOCK_DATASETS_2020
+        elif release_filter == "invalid-release":
+            active_datasets = []
         elif release_filter == "2024r-pp":
             active_datasets = MOCK_DATASETS
+        elif release_filter and "2025r-evgen" in release_filter:
+            active_datasets = [d for d in MOCK_DATASETS_2025 if d.get("release", {}).get("name") == release_filter]
         else:
             active_datasets = ALL_MOCK_DATASETS
 
@@ -163,58 +186,56 @@ def mock_api():
         if "/weights/" in url:
             parts = url.split("/weights/")[-1].split("/")
             
-            # /weights endpoint (all weights)
-            if len(parts) == 1 and not parts[0]:
+            # /weights/dsids/{dsids_list}
+            if len(parts) >= 2 and parts[0] == "dsids":
+                dsids = parts[1].split(",")
+                mock_response = MagicMock()
+                mock_response.status_code = 200
+                bulk_data = {}
+                for dsid_str in dsids:
+                    if dsid_str == "306600":
+                        bulk_data[dsid_str] = {"e8514": MOCK_WEIGHT_METADATA_13TEV["weights"]}
+                    elif dsid_str == "525668":
+                        bulk_data[dsid_str] = {"e8515": MOCK_WEIGHT_METADATA_13P6TEV["weights"]}
+                mock_response.json.return_value = bulk_data
+                return mock_response
+            
+            # /weights/dsid/{dataset_number} or /weights/dsid/{dataset_number}/tag/{e_tag}
+            if len(parts) >= 2 and parts[0] == "dsid":
+                dataset_number = parts[1]
+                is_tag_endpoint = len(parts) >= 4 and parts[2] == "tag"
+                tag_name = parts[3] if is_tag_endpoint else None
+                
                 mock_response = MagicMock()
                 mock_response.raise_for_status.return_value = None
-                mock_response.json.return_value = {
-                    "13TeV": {"306600": MOCK_WEIGHT_METADATA_13TEV["weights"]},
-                    "13p6TeV": {"525668": MOCK_WEIGHT_METADATA_13P6TEV["weights"]},
-                }
-                return mock_response
-            
-            # /weights/{release_name} endpoint
-            if len(parts) == 1:
-                release_name = parts[0]
-                mock_response = MagicMock()
-                if release_name == "2025r-evgen-13tev":
-                    mock_response.raise_for_status.return_value = None
-                    mock_response.json.return_value = MOCK_ALL_WEIGHTS_RELEASE
-                elif release_name == "2025r-evgen-13p6tev":
-                    mock_response.raise_for_status.return_value = None
-                    mock_response.json.return_value = {
-                        "release_name": "2025r-evgen-13p6tev",
-                        "energy_level": "13p6TeV",
-                        "datasets": {"525668": MOCK_WEIGHT_METADATA_13P6TEV["weights"]},
-                    }
-                else:
-                    error_response = MagicMock()
-                    error_response.status_code = 404
-                    http_error = requests.exceptions.HTTPError(f"404 Client Error: Not Found for url: {url}")
-                    http_error.response = error_response
-                    mock_response.raise_for_status.side_effect = http_error
-                return mock_response
-            
-            # /weights/{release_name}/{dataset_number} endpoint
-            if len(parts) >= 2:
-                release_name = parts[0]
-                dataset_number = parts[1]
-                mock_response = MagicMock()
                 
-                if release_name == "2025r-evgen-13tev" and dataset_number == "306600":
-                    mock_response.raise_for_status.return_value = None
-                    mock_response.json.return_value = MOCK_WEIGHT_METADATA_13TEV
-                elif release_name == "2025r-evgen-13p6tev" and dataset_number == "525668":
-                    mock_response.raise_for_status.return_value = None
-                    mock_response.json.return_value = MOCK_WEIGHT_METADATA_13P6TEV
+                if dataset_number == "306600":
+                    if is_tag_endpoint:
+                        mock_response.json.return_value = MOCK_WEIGHT_METADATA_13TEV["weights"]
+                    else:
+                        mock_response.json.return_value = {
+                            "dsid": 306600,
+                            "weights": {"e8514": MOCK_WEIGHT_METADATA_13TEV["weights"]},
+                            "count": 5
+                        }
+                    return mock_response
+                elif dataset_number == "525668":
+                    if is_tag_endpoint:
+                        mock_response.json.return_value = MOCK_WEIGHT_METADATA_13P6TEV["weights"]
+                    else:
+                        mock_response.json.return_value = {
+                            "dsid": 525668,
+                            "weights": {"e8515": MOCK_WEIGHT_METADATA_13P6TEV["weights"]},
+                            "count": 3
+                        }
+                    return mock_response
                 else:
-                    # Create a proper HTTPError with response
                     error_response = MagicMock()
                     error_response.status_code = 404
                     http_error = requests.exceptions.HTTPError(f"404 Client Error: Not Found for url: {url}")
                     http_error.response = error_response
                     mock_response.raise_for_status.side_effect = http_error
-                return mock_response
+                    return mock_response
 
         # Handle count endpoint: /datasets/count
         if "/datasets/count" in url:
@@ -285,9 +306,32 @@ def mock_api():
         mock_response.json.return_value = []
         return mock_response
 
+    def post_side_effect(url, data=None, json=None, *args, **kwargs):
+        if "/weights/bulk" in url:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            
+            dsids = json.get("dsids", []) if json else []
+            bulk_data = {}
+            for dsid in dsids:
+                dsid_str = str(dsid)
+                if dsid_str == "306600":
+                    bulk_data[dsid_str] = {"e8514": MOCK_WEIGHT_METADATA_13TEV["weights"]}
+                elif dsid_str == "525668":
+                    bulk_data[dsid_str] = {"e8515": MOCK_WEIGHT_METADATA_13P6TEV["weights"]}
+            
+            mock_response.json.return_value = bulk_data
+            return mock_response
+            
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {}
+        return mock_response
+
     # Create the mock session
     mock_session = MagicMock()
     mock_session.get.side_effect = get_side_effect
+    mock_session.post.side_effect = post_side_effect
 
     # Patch requests.Session to always return our mock
     # This prevents _get_session from creating a real session
@@ -867,7 +911,7 @@ def test_count_endpoint_mock():
 
     # Test without release filter
     response_all = session.get(f"{md.API_BASE_URL}/datasets/count", timeout=30)
-    assert response_all.json()["count"] == 5  # ALL_MOCK_DATASETS has 5 (4 + 1 from 2020)
+    assert response_all.json()["count"] == 7  # ALL_MOCK_DATASETS has 7 (4 + 1 from 2020 + 2 from 2025)
 
 
 def test_fetch_and_cache_handles_count_error():
@@ -1352,6 +1396,105 @@ def test_get_all_weights_http_error_non_404():
         
         # Should re-raise the HTTPError (not convert to ValueError)
         with pytest.raises(requests.exceptions.HTTPError):
+            atom.get_all_weights_for_release("2025r-evgen-13tev")
+
+
+def test_get_weights_no_etag():
+    """Test weight retrieval when e_tag is missing from metadata."""
+    from src.atlasopenmagic import metadata as md
+    md._weight_metadata = {}
+    
+    with patch("src.atlasopenmagic.metadata.get_metadata") as mock_get_metadata:
+        def mock_gm_side_effect(key, var=None):
+            if var == "dataset_number": return "306600"
+            if var == "e_tag": return None  # Missing e_tag
+            if var == "CoMEnergy": return "13TeV"
+            return None
+        mock_get_metadata.side_effect = mock_gm_side_effect
+        
+        weights = atom.get_weights("306600")
+        assert weights["dataset_number"] == "306600"
+        assert weights["weight_count"] == 5
+
+
+def test_get_all_weights_invalid_dataset_format():
+    """Test when dataset fetch returns non-dictionary values."""
+    from src.atlasopenmagic import metadata as md
+    md._weight_metadata = {}
+    
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+        
+        def mock_get_side_effect(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            if "datasets" in url:
+                # Include a string and an integer instead of a dict to trigger Exception
+                mock_resp.json.return_value = ["not_a_dict", 123, {"dataset_number": "306600", "e_tag": "e8514", "CoMEnergy": "13TeV"}]
+                return mock_resp
+            if "dsids" in url:
+                mock_resp.json.return_value = {"306600": {"e8514": ["w1", "w2"]}}
+                return mock_resp
+            return mock_resp
+            
+        mock_session.get.side_effect = mock_get_side_effect
+        mock_session_getter.return_value = mock_session
+        
+        res = atom.get_all_weights_for_release("2025r-evgen-13tev")
+        assert "306600" in res["datasets"]
+
+
+def test_get_all_weights_bulk_fallback_tag():
+    """Test when bulk API returns different e_tag than expected."""
+    from src.atlasopenmagic import metadata as md
+    md._weight_metadata = {}
+    
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+        
+        def mock_get_side_effect(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            if "datasets" in url:
+                mock_resp.json.return_value = [{"dataset_number": "306600", "e_tag": "e8514", "CoMEnergy": "13TeV"}]
+                return mock_resp
+            if "dsids" in url:
+                # API returns a different tag
+                mock_resp.json.return_value = {"306600": {"wrong_tag": ["w1", "w2"]}}
+                return mock_resp
+            return mock_resp
+            
+        mock_session.get.side_effect = mock_get_side_effect
+        mock_session_getter.return_value = mock_session
+        
+        res = atom.get_all_weights_for_release("2025r-evgen-13tev")
+        assert "306600" in res["datasets"]
+        assert len(res["datasets"]["306600"]) == 2
+
+
+def test_get_all_weights_http_error_404():
+    """Test handling of 404 HTTPError in get_all_weights_for_release."""
+    from src.atlasopenmagic import metadata as md
+    md._weight_metadata = {}
+    
+    with patch("src.atlasopenmagic.metadata._get_session") as mock_session_getter:
+        mock_session = MagicMock()
+        
+        def mock_get_side_effect(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            if "datasets" in url:
+                mock_resp.json.return_value = [{"dataset_number": "306600", "e_tag": "e8514"}]
+                return mock_resp
+            
+            error_response = MagicMock()
+            error_response.status_code = 404
+            http_error = requests.exceptions.HTTPError("404 Not Found")
+            http_error.response = error_response
+            mock_resp.raise_for_status.side_effect = http_error
+            return mock_resp
+
+        mock_session.get.side_effect = mock_get_side_effect
+        mock_session_getter.return_value = mock_session
+        
+        with pytest.raises(ValueError, match="Weights not found for release"):
             atom.get_all_weights_for_release("2025r-evgen-13tev")
 
 
