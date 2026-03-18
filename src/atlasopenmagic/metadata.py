@@ -24,10 +24,10 @@ atom.set_verbosity('error')  # or 'warning', 'info', 'debug'
 """
 # pylint: disable=line-too-long, too-many-locals
 
-import json
+import json # For writing json output files
 import logging
 import os
-import pprint
+import pprint # For pretty printing of dictionaries
 import threading
 import warnings
 
@@ -430,6 +430,9 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         # Only clear cache and fetch if the release changed or cache is empty
         if release_changed or not _metadata:
             _metadata = {}  # Invalidate and clear the cache
+            # Call all registered callbacks (like the weights cache clearer)
+            for callback in _cache_clear_callbacks:
+                callback()
             # Fetch the data for the updated release and load it into the cache
             _fetch_and_cache_release_data(current_release, page_size=page_size)
         else:
@@ -789,7 +792,13 @@ def get_all_metadata() -> dict[str, dict]:
             _fetch_and_cache_release_data(current_release)
     return _metadata
 
+# A list of functions to call when clearing the cache, so that we avoid circular imports
+_cache_clear_callbacks = []
 
+def register_cache_clear_callback(callback):
+    """Register a function to be called when empty_metadata() is executed."""
+    _cache_clear_callbacks.append(callback)
+    
 def empty_metadata() -> None:
     """Internal helper function to empty the metadata cache and leave it empty."""
     # Make sure we work with the global object
@@ -800,6 +809,9 @@ def empty_metadata() -> None:
     # No more metadata fields available
     AVAILABLE_FIELDS = []
 
+    # Call all registered callbacks (like the weights cache clearer)
+    for callback in _cache_clear_callbacks:
+        callback()
 
 # --- Metadata search functions
 

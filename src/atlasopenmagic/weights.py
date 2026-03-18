@@ -16,6 +16,8 @@ metadata.API_BASE_URL = os.environ.get("ATLAS_metadata.API_BASE_URL", "https://a
 
 # Cache for weight metadata to avoid repeated API calls
 _weight_metadata = {}
+# Tell the metadata module to clear our cache whenever empty_metadata() is called
+metadata.register_cache_clear_callback(lambda: _weight_metadata.clear())
 
 _logger = logging.getLogger(__name__)
 
@@ -173,7 +175,7 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
     try:
         session = metadata.get_session()
         # Fallback implementation as PMG weight DB doesn't have a release-wide endpoint
-        _logger.warning("Retrieving all weights using bulk endpoint.")
+        _logger.info("Retrieving all weights using bulk endpoint.")
 
         all_datasets = {}
         release_energy = "13TeV"  # default fallback
@@ -181,23 +183,24 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
         # Collect datasets and their specific tags
         valid_datasets = []
 
-        # If the requested release is metadata.get_current_release(), we could use available_datasets(),
-        # but to be totally consistent and ensure we get proper dict data, we fetch it:
-        ds_resp = session.get(
-            f"{metadata.API_BASE_URL}/datasets", params={"release_name": release, "limit": 5000}, timeout=120
-        )
-        ds_resp.raise_for_status()
-        datasets_data = ds_resp.json()
-
-        for ds in datasets_data:
-            try:
-                dsid = ds.get("dataset_number")
-                e_tag = ds.get("e_tag")
-                energy = ds.get("CoMEnergy") or "13TeV"
-                if dsid:
-                    valid_datasets.append({"dsid": int(dsid), "e_tag": e_tag, "energy": energy})
-            except Exception:
-                continue
+        # Use the already cached metadata if we are querying the active release!
+        # This completely avoids re-hammering the API server for datasets.
+        if release == metadata.get_current_release():
+            dataset_keys = metadata.available_datasets()
+            for dsid in dataset_keys:
+                try:
+                    e_tag = metadata.get_metadata(dsid, "e_tag")
+                    energy = metadata.get_metadata(dsid, "CoMEnergy")
+                    if not energy:
+                        energy = "13TeV"
+                    if dsid:
+                        valid_datasets.append({"dsid": int(dsid), "e_tag": e_tag, "energy": energy})
+                except Exception:
+                    continue
+        else:
+            # The weights should be always be fetched for the current release.
+            _logger.error("Release '%s' is not the current release. Unable to fetch dataset metadata for weights retrieval.", release)
+            raise ValueError(f"Release '{release}' is not the current release. Please use set_release('{release}') to switch to this release before fetching weights.")
 
         if valid_datasets:
             release_energy = valid_datasets[0]["energy"]
