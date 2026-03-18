@@ -205,11 +205,12 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
         else:
             # The weights should be always be fetched for the current release.
             _logger.error(
-                "Release '%s' is not the current release. Unable to fetch dataset metadata for weights retrieval.",
+                "Release '%s' is not the current release. Unable to fetch dataset metadata.",
                 release,
             )
             raise ValueError(
-                f"Release '{release}' is not the current release. Please use set_release('{release}') to switch to this release before fetching weights."
+                f"Release '{release}' is not the current release. "
+                f"Please use set_release('{release}') to switch to this release before fetching weights."
             )
 
         if valid_datasets:

@@ -1668,7 +1668,6 @@ def test_get_all_weights_for_release_loop_exception():
         ) as mock_session_getter:
             mock_session = MagicMock()
             mock_resp = MagicMock()
-            # Fails at 250 instead if valid_datasets is empty (which happens since loop exception triggers 'continue')
             mock_session.get.return_value = mock_resp
             mock_session_getter.return_value = mock_session
 
