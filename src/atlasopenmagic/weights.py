@@ -2,11 +2,11 @@
 
 # pylint: disable=line-too-long, too-many-locals
 
+import logging
 import os
 from typing import Any, Optional
-import logging
-import requests
 
+import requests
 from tqdm import tqdm
 
 from . import metadata
@@ -20,6 +20,7 @@ _weight_metadata = {}
 metadata.register_cache_clear_callback(lambda: _weight_metadata.clear())
 
 _logger = logging.getLogger(__name__)
+
 
 def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
     """Retrieve weight metadata for a specific dataset in the current release.
@@ -53,7 +54,11 @@ def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
         >>> print(weights['weights'][:5])  # First 5 weight names
     """
     key_str = str(key).strip()
-    cache_key = f"{metadata.get_current_release()}:{key_str}:{e_tag}" if e_tag else f"{metadata.get_current_release()}:{key_str}"
+    cache_key = (
+        f"{metadata.get_current_release()}:{key_str}:{e_tag}"
+        if e_tag
+        else f"{metadata.get_current_release()}:{key_str}"
+    )
 
     # Check cache first
     if cache_key in _weight_metadata:
@@ -104,7 +109,7 @@ def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
         return weights_data
 
     except requests.exceptions.HTTPError as e:
-        status = getattr(e.response, 'status_code', None)
+        status = getattr(e.response, "status_code", None)
         if status == 404:
             raise ValueError(
                 f"Weights not found for dataset '{key_str}' in release '{metadata.get_current_release()}'. "
@@ -199,8 +204,13 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
                     continue
         else:
             # The weights should be always be fetched for the current release.
-            _logger.error("Release '%s' is not the current release. Unable to fetch dataset metadata for weights retrieval.", release)
-            raise ValueError(f"Release '{release}' is not the current release. Please use set_release('{release}') to switch to this release before fetching weights.")
+            _logger.error(
+                "Release '%s' is not the current release. Unable to fetch dataset metadata for weights retrieval.",
+                release,
+            )
+            raise ValueError(
+                f"Release '{release}' is not the current release. Please use set_release('{release}') to switch to this release before fetching weights."
+            )
 
         if valid_datasets:
             release_energy = valid_datasets[0]["energy"]
@@ -259,7 +269,7 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
         return result
 
     except requests.exceptions.HTTPError as e:
-        status = getattr(e.response, 'status_code', None)
+        status = getattr(e.response, "status_code", None)
         if status == 404:
             raise ValueError(
                 f"Weights not found for release '{release}'. "

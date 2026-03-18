@@ -24,16 +24,16 @@ atom.set_verbosity('error')  # or 'warning', 'info', 'debug'
 """
 # pylint: disable=line-too-long, too-many-locals
 
-import json # For writing json output files
+import json  # For writing json output files
 import logging
 import os
-import pprint # For pretty printing of dictionaries
+import pprint  # For pretty printing of dictionaries
 import threading
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Some functions (like metadata) can return any type
 from typing import Any, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -67,8 +67,6 @@ current_release = os.environ.get("ATLAS_RELEASE", "2024r-pp")
 API_BASE_URL = os.environ.get("ATLAS_API_BASE_URL", "https://atlasopenmagic-api.app.cern.ch")
 
 
-
-
 # The local cache to store metadata fetched from the API for the current release.
 # This dictionary is populated on the first call to get_metadata() for a
 # new release.
@@ -84,7 +82,7 @@ _metadata_lock = threading.Lock()
 current_local_path = None  # pylint: disable=invalid-name
 
 # Global HTTP Session
-_session = None #pylint: disable=invalid-name
+_session = None  # pylint: disable=invalid-name
 
 
 # A user-friendly dictionary describing the available data releases.
@@ -439,10 +437,9 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
             _logger.info("Release '%s' already active with cached metadata.", release)
 
     _logger.info(
-        "Active release: %s. "
-        "(Datasets path: %s)",
+        "Active release: %s. " "(Datasets path: %s)",
         current_release,
-        current_local_path if current_local_path else 'REMOTE'
+        current_local_path if current_local_path else "REMOTE",
     )
 
 
@@ -544,7 +541,7 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
         len(updated_samples),
         updated_samples,
         replaced_file_count,
-        total_files_in_updated_samples
+        total_files_in_updated_samples,
     )
 
 
@@ -792,13 +789,16 @@ def get_all_metadata() -> dict[str, dict]:
             _fetch_and_cache_release_data(current_release)
     return _metadata
 
+
 # A list of functions to call when clearing the cache, so that we avoid circular imports
 _cache_clear_callbacks = []
+
 
 def register_cache_clear_callback(callback):
     """Register a function to be called when empty_metadata() is executed."""
     _cache_clear_callbacks.append(callback)
-    
+
+
 def empty_metadata() -> None:
     """Internal helper function to empty the metadata cache and leave it empty."""
     # Make sure we work with the global object
@@ -812,6 +812,7 @@ def empty_metadata() -> None:
     # Call all registered callbacks (like the weights cache clearer)
     for callback in _cache_clear_callbacks:
         callback()
+
 
 # --- Metadata search functions
 

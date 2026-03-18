@@ -25,17 +25,13 @@ from .metadata import (
     set_release,
     set_verbosity,
 )
-from .weights import (
-    get_weights,
-    get_weight_names,
-    get_all_weights_for_release,
-)
 from .utils import (
     build_data_dataset,
     build_dataset,
     build_mc_dataset,
     install_from_environment,
 )
+from .weights import get_all_weights_for_release, get_weight_names, get_weights
 
 # List of public functions available when importing the package
 __all__ = [
