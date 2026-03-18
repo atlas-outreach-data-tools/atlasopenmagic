@@ -13,20 +13,22 @@ from .metadata import (
     find_all_files,
     get_all_info,
     get_all_metadata,
-    get_all_weights_for_release,
     get_current_release,
     get_metadata,
     get_metadata_fields,
     get_urls,
     get_urls_data,
-    get_weight_names,
-    get_weights,
     match_metadata,
     print_metadata,
     read_metadata,
     save_metadata,
     set_release,
     set_verbosity,
+)
+from .weights import (
+    get_weights,
+    get_weight_names,
+    get_all_weights_for_release,
 )
 from .utils import (
     build_data_dataset,
