@@ -4,6 +4,8 @@ It includes functions to install packages from an environment file
 and to build datasets from sample definitions.
 """
 
+# pylint: disable=line-too-long, too-many-locals
+
 
 import io
 import re

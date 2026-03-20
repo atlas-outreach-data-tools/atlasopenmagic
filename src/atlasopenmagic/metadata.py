@@ -22,12 +22,15 @@ print(urls)
 atom.set_verbosity('error')  # or 'warning', 'info', 'debug'
 ```
 """
+# pylint: disable=line-too-long, too-many-locals
 
-
+import json  # For writing json output files
 import logging
 import os
+import pprint  # For pretty printing of dictionaries
 import threading
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Some functions (like metadata) can return any type
 from typing import Any, Optional
@@ -76,7 +79,10 @@ _metadata_lock = threading.Lock()
 
 
 # The local path for caching dataset files, if set.
-current_local_path = None
+current_local_path = None  # pylint: disable=invalid-name
+
+# Global HTTP Session
+_session = None  # pylint: disable=invalid-name
 
 
 # A user-friendly dictionary describing the available data releases.
@@ -166,7 +172,7 @@ def _apply_protocol(url: str, protocol: str) -> str:
     raise ValueError(f"Invalid protocol '{protocol}'. Must be 'root', 'https', or 'eos'.")
 
 
-def _get_session() -> requests.Session:
+def get_session() -> requests.Session:
     """Reusable HTTP session with retries and connection pooling."""
     global _session
     try:
@@ -211,7 +217,7 @@ def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
         skip: The number of records to skip (offset) for pagination.
         page_size: The maximum number of records to return in this page.
     """
-    session = _get_session()
+    session = get_session()
     resp = session.get(
         f"{API_BASE_URL}/datasets",
         params={"release_name": release_name, "skip": skip, "limit": page_size},
@@ -248,15 +254,15 @@ def set_verbosity(level: str = "info") -> None:
         raise ValueError(f"Invalid verbosity level '{level}'. " f"Choose from: {', '.join(level_map.keys())}")
 
     _console_handler.setLevel(level_map[level_lower])
-    _logger.debug(f"Verbosity set to '{level}'")
+    _logger.debug("Verbosity set to '%s'", level)
 
 
 def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_size: int = 1000) -> None:
     """Fetch all datasets using batched parallel requests with a pooled Session."""
     global _metadata, AVAILABLE_FIELDS
-    _logger.info(f"Fetching metadata for release: {release_name}...")
+    _logger.info("Fetching metadata for release: %s...", release_name)
 
-    session = _get_session()
+    session = get_session()
 
     # Get total count first
     try:
@@ -267,7 +273,7 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
         )
         total_datasets = count_response.json().get("count", 0) if count_response.ok else 10000
     except Exception as e:
-        _logger.debug(f"Count endpoint failed: {e}. Using fallback estimate.")
+        _logger.debug("Count endpoint failed: %s. Using fallback estimate.", e)
         total_datasets = 10000  # Fallback estimate, more or less twice than our biggest release
 
     # Calculate number of pages needed
@@ -284,8 +290,6 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
     # Bound workers and fetch in batches to avoid flooding the API
     workers = max(1, min(int(max_workers), 8))
     try:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
         with ThreadPoolExecutor(max_workers=workers) as executor:
             for batch_start in range(0, len(page_offsets), workers):
                 batch = page_offsets[batch_start : batch_start + workers]
@@ -311,7 +315,7 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
                             pbar.update(len(datasets_page))
 
                     except Exception as e:
-                        _logger.error(f"Error fetching page: {e}")
+                        _logger.error("Error fetching page: %s", e)
                         raise e
     finally:
         if pbar:
@@ -323,8 +327,8 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
     for k in _metadata:
         AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
 
-    total_fetched = len([k for k in _metadata.keys() if k.isdigit() or k == "data"])
-    _logger.info(f"✓ Successfully cached {total_fetched} datasets.")
+    total_fetched = len([k for k in _metadata if k.isdigit() or k == "data"])
+    _logger.info("✓ Successfully cached %d datasets.", total_fetched)
 
 
 # --- Public API Functions ---
@@ -359,29 +363,29 @@ def get_current_release() -> str:
     return current_release
 
 
-def _convert_to_local(url: str, current_local_path: Optional[str] = None) -> str:
+def _convert_to_local(url: str, local_path: Optional[str] = None) -> str:
     """Convert to a local file path if one is set for the current release.
 
     Args:
         url: The URL to convert.
-        current_local_path: The current local path setting.
+        local_path: The current local path setting.
 
     Returns:
         The converted local path or original URL if no local path is set.
     """
-    if not current_local_path:
+    if not local_path:
         return url  # No local mode active
-    if url.startswith(current_local_path):
+    if url.startswith(local_path):
         return url  # Already local
     # remove protocol and hostname, keep relative EOS path:
-    if current_local_path == "eos":
+    if local_path == "eos":
         # Special case for EOS: just return the path
         return os.path.join("/eos/", url.split("eos/", 1)[-1])
 
     rel = url.split(
         "/",
     )[-1]
-    return os.path.join(current_local_path, rel)
+    return os.path.join(local_path, rel)
 
 
 def set_release(release: str, local_path: Optional[str] = None, page_size: int = 1000) -> None:
@@ -424,14 +428,18 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         # Only clear cache and fetch if the release changed or cache is empty
         if release_changed or not _metadata:
             _metadata = {}  # Invalidate and clear the cache
+            # Call all registered callbacks (like the weights cache clearer)
+            for callback in _cache_clear_callbacks:
+                callback()
             # Fetch the data for the updated release and load it into the cache
             _fetch_and_cache_release_data(current_release, page_size=page_size)
         else:
-            _logger.info(f"Release '{release}' already active with cached metadata.")
+            _logger.info("Release '%s' already active with cached metadata.", release)
 
     _logger.info(
-        f"Active release: {current_release}. "
-        f"(Datasets path: {current_local_path if current_local_path else 'REMOTE'})"
+        "Active release: %s. " "(Datasets path: %s)",
+        current_release,
+        current_local_path if current_local_path else "REMOTE",
     )
 
 
@@ -527,9 +535,13 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
     )
 
     _logger.info(
-        f"Metadata updated with local paths for {len(updated_samples)} samples "
-        f"({updated_samples}) and {replaced_file_count} files "
-        f"(out of {total_files_in_updated_samples} in those samples)."
+        "Metadata updated with local paths for %d samples "
+        "(%s) and %d files "
+        "(out of %d in those samples).",
+        len(updated_samples),
+        updated_samples,
+        replaced_file_count,
+        total_files_in_updated_samples,
     )
 
 
@@ -559,7 +571,7 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
         if key_str not in _metadata:
             # Fetch just this one dataset from the API using the correct endpoint
             try:
-                session = _get_session()
+                session = get_session()
                 response = session.get(
                     f"{API_BASE_URL}/metadata/{current_release}/{key_str}",
                     timeout=30,
@@ -636,8 +648,6 @@ def print_metadata(key: str) -> None:
         ValueError: If the dataset key cannot be found.
     """
     # Direct pass through using prettyprint to print the dictionary in a nice format
-    import pprint
-
     pprint.pp(get_metadata(key))
 
 
@@ -693,13 +703,13 @@ def get_urls(key: str, skim: str = "noskim", protocol: str = "root", cache: Opti
 
     # Check if the user-requested skim exists in our constructed dictionary.
     if skim not in available_files:
-        available_skims = ", ".join(sorted(available_files.keys()))
-        if available_skims == "noskim":
+        avail_skims_str = ", ".join(sorted(available_files.keys()))
+        if avail_skims_str == "noskim":
             raise ValueError(
                 f"Dataset '{key}' only has the base (unskimmed) version available.\n \
                 Are you sure that this release ({current_release}) has skimmed datasets?"
             )
-        raise ValueError(f"Skim '{skim}' not found for dataset '{key}'. Available skims: {available_skims}")
+        raise ValueError(f"Skim '{skim}' not found for dataset '{key}'. Available skims: {avail_skims_str}")
 
     # Retrieve the correct list of URLs and apply the requested protocol
     # transformation.
@@ -780,6 +790,15 @@ def get_all_metadata() -> dict[str, dict]:
     return _metadata
 
 
+# A list of functions to call when clearing the cache, so that we avoid circular imports
+_cache_clear_callbacks = []
+
+
+def register_cache_clear_callback(callback):
+    """Register a function to be called when empty_metadata() is executed."""
+    _cache_clear_callbacks.append(callback)
+
+
 def empty_metadata() -> None:
     """Internal helper function to empty the metadata cache and leave it empty."""
     # Make sure we work with the global object
@@ -789,6 +808,10 @@ def empty_metadata() -> None:
         _metadata = {}
     # No more metadata fields available
     AVAILABLE_FIELDS = []
+
+    # Call all registered callbacks (like the weights cache clearer)
+    for callback in _cache_clear_callbacks:
+        callback()
 
 
 # --- Metadata search functions
@@ -906,9 +929,7 @@ def save_metadata(file_name: str = "metadata.json") -> None:
 
     # If they request json file saving, we have a very easy time
     if file_name.endswith(".json"):
-        import json
-
-        with open(file_name, "w") as outfile:
+        with open(file_name, "w", encoding="utf-8") as outfile:
             json.dump(
                 _metadata,
                 outfile,
@@ -919,10 +940,8 @@ def save_metadata(file_name: str = "metadata.json") -> None:
             )
     # If they want text files, just use pretty print
     elif file_name.endswith(".txt"):
-        import pprint
-
-        with open(file_name, "w") as outfile:
-            pprint.pprint(_metadata, outfile, indent=2)
+        with open(file_name, "w", encoding="utf-8") as outfile:
+            pprint.pprint(_metadata, stream=outfile, indent=2)
     # No other formats supported at this time
     else:
         raise ValueError(
@@ -947,14 +966,12 @@ def read_metadata(file_name: str = "metadata.json", release: str = "custom") -> 
     global _metadata, current_release, AVAILABLE_FIELDS
 
     # Let the users know that we heard them
-    _logger.info(f"Loading metadata from {file_name}, and setting release to {release}")
+    _logger.info("Loading metadata from %s, and setting release to %s", file_name, release)
 
     # Lock it up so that no one else is writing to it at the moment
     with _metadata_lock:
         # Now load the metadata. We'll take it all, directly, just like we saved it above
-        import json
-
-        with open(file_name) as input_metadata:
+        with open(file_name, encoding="utf-8") as input_metadata:
             my_metadata = json.load(input_metadata)
             if not isinstance(my_metadata, dict):
                 raise ValueError(f"Did not get expected dictionary from {file_name}. Will not load metadata.")

@@ -31,6 +31,7 @@ from .utils import (
     build_mc_dataset,
     install_from_environment,
 )
+from .weights import get_all_weights_for_release, get_weight_names, get_weights
 
 # List of public functions available when importing the package
 __all__ = [
@@ -52,6 +53,9 @@ __all__ = [
     "save_metadata",
     "read_metadata",
     "get_all_metadata",
+    "get_weights",
+    "get_weight_names",
+    "get_all_weights_for_release",
     "install_from_environment",
     "build_dataset",
     "build_mc_dataset",
