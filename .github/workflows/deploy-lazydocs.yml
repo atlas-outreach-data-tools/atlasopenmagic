@@ -60,8 +60,12 @@ jobs:
 
           # Copy the generated docs to the cloned repository
           sed '1,2d' ./docs/intro.md > atlas-open-data-website-v2/docs/atlasopenmagic/intro.md
-          cp ./docs/metadata.md atlas-open-data-website-v2/docs/atlasopenmagic/metadata.md
-          cp ./docs/utils.md atlas-open-data-website-v2/docs/atlasopenmagic/utils.md
+          for file in ./docs/*.md; do
+            name=$(basename "$file")
+            if [ "$name" != "intro.md" ]; then
+              cp "$file" "atlas-open-data-website-v2/docs/atlasopenmagic/$name"
+            fi
+          done
           cp ./README.md atlas-open-data-website-v2/docs/atlasopenmagic/atlasopenmagic.md
           ls -l .
 
