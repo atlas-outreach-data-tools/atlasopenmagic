@@ -16,7 +16,7 @@ import requests
 
 import atlasopenmagic as atom
 
-# SET THIS TO SIMULATE THE API IN TESTS
+# Set this to simulate the API in tests
 os.environ["ATLAS_API_BASE_URL"] = "http://mock-api.test"
 
 # --- Mock API Response ---
