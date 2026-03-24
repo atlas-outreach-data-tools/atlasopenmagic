@@ -47,11 +47,14 @@ def get_weights(key: str, e_tag: Optional[str] = None) -> dict[str, Any]:
         requests.exceptions.RequestException: If the API request fails.
 
     Example:
-        >>> import atlasopenmagic as atom
-        >>> atom.set_release('2025r-evgen-13tev')
-        >>> weights = atom.get_weights('306600', e_tag='e8514')
-        >>> print(f"Found {weights['weight_count']} weights")
-        >>> print(weights['weights'][:5])  # First 5 weight names
+    ```python
+    import atlasopenmagic as atom
+
+    atom.set_release('2025r-evgen-13tev')
+    weights = atom.get_weights('306600', e_tag='e8514')
+    print("Found", weights['weight_count'], "weights")
+    print(weights['weights'][:5])  # First 5 weight names
+    ```
     """
     key_str = str(key).strip()
     cache_key = (
@@ -137,10 +140,13 @@ def get_weight_names(key: str, e_tag: Optional[str] = None) -> list[str]:
         ValueError: If the dataset is not found or weights are not available.
 
     Example:
-        >>> import atlasopenmagic as atom
-        >>> atom.set_release('2025r-evgen-13tev')
-        >>> weight_names = atom.get_weight_names('306600', e_tag='e8514')
-        >>> print(weight_names[:3])  # First 3 weight names
+    ```python
+    import atlasopenmagic as atom
+
+    atom.set_release('2025r-evgen-13tev')
+    weight_names = atom.get_weight_names('306600', e_tag='e8514')
+    print(weight_names[:3])  # First 3 weight names
+    ```
     """
     weights_data = get_weights(key, e_tag=e_tag)
     return weights_data.get("weights", [])
@@ -163,9 +169,12 @@ def get_all_weights_for_release(release_name: Optional[str] = None) -> dict[str,
         requests.exceptions.RequestException: If the API request fails.
 
     Example:
-        >>> import atlasopenmagic as atom
-        >>> all_weights = atom.get_all_weights_for_release('2025r-evgen-13tev')
-        >>> print(f"Datasets with weights: {len(all_weights['datasets'])}")
+    ```python
+    import atlasopenmagic as atom
+
+    all_weights = atom.get_all_weights_for_release('2025r-evgen-13tev')
+    print("Datasets with weights:", len(all_weights['datasets']))
+    ```
     """
     release = release_name or metadata.get_current_release()
     cache_key = f"release:{release}"
