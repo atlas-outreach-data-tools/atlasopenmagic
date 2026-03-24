@@ -16,7 +16,7 @@ import requests
 
 import atlasopenmagic as atom
 
-# SET THIS BEFORE ANY IMPORTS
+# SET THIS TO SIMULATE THE API IN TESTS
 os.environ["ATLAS_API_BASE_URL"] = "http://mock-api.test"
 
 # --- Mock API Response ---
@@ -1505,9 +1505,9 @@ def test_get_all_weights_invalid_dataset_format():
     md.current_release = "2025r-evgen-13tev"
 
     try:
-        with patch(
-            "atlasopenmagic.metadata.available_datasets", side_effect=Exception("not cached")
-        ), patch("atlasopenmagic.metadata.get_session") as mock_session_getter:
+        with patch("atlasopenmagic.metadata.available_datasets", side_effect=Exception("not cached")), patch(
+            "atlasopenmagic.metadata.get_session"
+        ) as mock_session_getter:
             # Emulate fetching non-current release datasets
             mock_session = MagicMock()
 
