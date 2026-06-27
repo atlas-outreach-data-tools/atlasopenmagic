@@ -12,7 +12,6 @@ from tqdm import tqdm
 from atlasopenmagic import metadata
 
 PMG_WEIGHTS_API_URL = os.environ.get("PMG_WEIGHTS_API_URL", "https://atlas-pmg-api.app.cern.ch")
-metadata.API_BASE_URL = os.environ.get("ATLAS_metadata.API_BASE_URL", "https://atlasopenmagic-api.app.cern.ch")
 
 # Cache for weight metadata to avoid repeated API calls
 _weight_metadata = {}
