@@ -277,16 +277,46 @@ def _read_json_file(path: str):
         return json.load(f)
 
 
+def _format_age(seconds: float) -> str:
+    """Render a cache age the way a person would say it."""
+    for unit, size in (("day", 86400), ("hour", 3600), ("minute", 60)):
+        if seconds >= size:
+            value = int(seconds // size)
+            return f"{value} {unit}{'s' if value != 1 else ''} old"
+    return "just now"
+
+
+def _describe_cache(release: str) -> str:
+    """One-word cache state for `release`, for human-readable output."""
+    age = _cache_age(_metadata_cache_path(release))
+    if age is None:
+        return "not cached"
+    state = "stale" if age >= _METADATA_CACHE_TTL_SECONDS else "fresh"
+    return f"{state}, {_format_age(age)}"
+
+
 # --- release ---
 
 
-def _cmd_release_list(_args):
-    _emit(_metadata.RELEASES_DESC)
+def _cmd_release_list(args):
+    if args.json:
+        _emit(_metadata.RELEASES_DESC)
+        return
+    active, _ = _resolve_release(args.release)
+    width = max(len(name) for name in _metadata.RELEASES_DESC)
+    for name, description in _metadata.RELEASES_DESC.items():
+        marker = "*" if name == active else " "
+        print(f"{marker} {name.ljust(width)}  {description}")
 
 
 def _cmd_release_show(args):
     release, source = _resolve_release(args.release)
-    _emit({"release": release, "source": source})
+    if args.json:
+        _emit({"release": release, "source": source, "cache": _describe_cache(release)})
+        return
+    print(f"Release: {release}")
+    print(f"Source:  {source}")
+    print(f"Cache:   {_describe_cache(release)}")
 
 
 def _cmd_release_set(args):
@@ -294,14 +324,31 @@ def _cmd_release_set(args):
     config = _read_config()
     config["release"] = args.name
     _write_config(config)
-    _emit({"release": args.name, "config_file": _CONFIG_PATH})
+
+    # Warm the cache now, so the cost of fetching a release is paid here where
+    # the user asked for it, rather than ambushing whichever query comes first.
+    cached = None
+    if not args.no_fetch:
+        _apply_release(args.name, refresh=args.refresh, needs_full=True)
+        cached = len(_metadata.available_datasets())
+
+    if args.json:
+        _emit({"release": args.name, "config_file": _CONFIG_PATH, "datasets_cached": cached})
+        return
+    print(f"Release set to {args.name} ({_CONFIG_PATH}).")
+    if cached is not None:
+        print(f"Cached {cached} datasets.")
 
 
-def _cmd_release_unset(_args):
+def _cmd_release_unset(args):
     config = _read_config()
     config.pop("release", None)
     _write_config(config)
-    _emit({"release": None, "config_file": _CONFIG_PATH})
+    if args.json:
+        _emit({"release": None, "config_file": _CONFIG_PATH})
+        return
+    fallback, source = _resolve_release(None)
+    print(f"Saved release cleared. Now using {fallback} (source: {source}).")
 
 
 # --- dataset ---
@@ -389,7 +436,7 @@ def _cmd_weights_list(args):
 # --- cache ---
 
 
-def _cmd_cache_info(_args):
+def _cmd_cache_info(args):
     entries = []
     for release in sorted(_known_releases()):
         path = _metadata_cache_path(release)
@@ -404,10 +451,21 @@ def _cmd_cache_info(_args):
                 "stale": age >= _METADATA_CACHE_TTL_SECONDS,
             }
         )
-    _emit({"cache_dir": _CACHE_DIR, "entries": entries})
+
+    if args.json:
+        _emit({"cache_dir": _CACHE_DIR, "entries": entries})
+        return
+    print(f"Cache directory: {_CACHE_DIR}")
+    if not entries:
+        print("No releases cached.")
+        return
+    width = max(len(e["release"]) for e in entries)
+    for entry in entries:
+        state = "stale" if entry["stale"] else "fresh"
+        print(f"  {entry['release'].ljust(width)}  {state}, {_format_age(entry['age_seconds'])}")
 
 
-def _cmd_cache_clear(_args):
+def _cmd_cache_clear(args):
     removed = []
     # Only ever remove files we know we wrote, never a blind glob of the directory.
     for release in sorted(_known_releases()):
@@ -417,14 +475,20 @@ def _cmd_cache_clear(_args):
         except OSError:
             continue
         removed.append(path)
-    _emit({"removed": removed})
+    if args.json:
+        _emit({"removed": removed})
+        return
+    print(f"Cleared {len(removed)} cached release{'s' if len(removed) != 1 else ''}.")
 
 
 def _cmd_cache_localize(args):
     _metadata.find_all_files(args.path, warnmissing=args.warn_missing)
     release = _metadata.get_current_release()
     _save_metadata_cache(_metadata_cache_path(release))
-    _emit({"localized": args.path, "release": release})
+    if args.json:
+        _emit({"localized": args.path, "release": release})
+        return
+    print(f"Cached metadata for {release} now points at {args.path}.")
 
 
 # --- env ---
@@ -450,6 +514,11 @@ def _add_release_commands(sub):
     )
     p = group.add_parser("set", help="Save a release to use for future commands")
     p.add_argument("name", help="Release name, e.g. 2024r-pp")
+    p.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help="Save the setting without downloading the release's metadata",
+    )
     p.set_defaults(func=_cmd_release_set)
     group.add_parser("unset", help="Forget the saved release").set_defaults(func=_cmd_release_unset)
 
@@ -595,6 +664,11 @@ def _build_parser():
         "--no-update-check",
         action="store_true",
         help="Skip the PyPI check for a newer atlasopenmagic release",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Force JSON output for commands that otherwise print for humans",
     )
 
     # Most commands only read one dataset; those needing the whole release

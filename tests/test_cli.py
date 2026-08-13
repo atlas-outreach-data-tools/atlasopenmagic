@@ -254,21 +254,70 @@ def test_apply_release_rejects_unknown_release():
 # --- release group ---
 
 
-def test_release_list_emits_all_releases(capsys):
-    _run("release", "list")
+def test_release_list_json_emits_all_releases(capsys):
+    _run("--json", "release", "list")
     assert json.loads(capsys.readouterr().out) == _metadata_mod.RELEASES_DESC
 
 
-def test_release_show_reports_release_and_source(capsys):
+def test_release_list_marks_the_active_release(capsys):
+    cli._write_config({"release": "2024r-hi"})
+    _run("release", "list")
+    lines = capsys.readouterr().out.splitlines()
+    active = [line for line in lines if line.startswith("*")]
+    assert len(active) == 1
+    assert "2024r-hi" in active[0]
+
+
+def test_release_show_json_reports_release_and_source(capsys):
+    cli._write_config({"release": "2020e-13tev"})
+    _run("--json", "release", "show")
+    out = json.loads(capsys.readouterr().out)
+    assert out["release"] == "2020e-13tev"
+    assert out["source"] == "config"
+    assert out["cache"] == "not cached"
+
+
+def test_release_show_reports_a_warm_cache(capsys, tmp_path):
+    _write_cache_file(tmp_path / "cache" / "metadata-2024r-pp.json")
+    cli._write_config({"release": "2024r-pp"})
+    _run("release", "show")
+    assert "Cache:   fresh, just now" in capsys.readouterr().out
+
+
+def test_release_show_prints_readable_summary(capsys):
     cli._write_config({"release": "2020e-13tev"})
     _run("release", "show")
-    assert json.loads(capsys.readouterr().out) == {"release": "2020e-13tev", "source": "config"}
+    out = capsys.readouterr().out
+    assert "Release: 2020e-13tev" in out
+    assert "Source:  config" in out
+    assert "Cache:   not cached" in out
 
 
-def test_release_set_persists_choice(capsys):
+def test_release_set_persists_choice_and_warms_cache(capsys, monkeypatch):
+    applied = []
+    monkeypatch.setattr(cli, "_apply_release", lambda release, refresh, needs_full: applied.append(release))
+    monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: ["301204", "410470"])
     assert _run("release", "set", "2024r-hi") == 0
-    assert json.loads(capsys.readouterr().out)["release"] == "2024r-hi"
+    assert applied == ["2024r-hi"]
+    assert "Cached 2 datasets." in capsys.readouterr().out
     assert cli._read_config()["release"] == "2024r-hi"
+
+
+def test_release_set_no_fetch_skips_the_download(capsys, monkeypatch):
+    def fail_if_fetched(*a, **kw):
+        raise AssertionError("--no-fetch must not download metadata")
+
+    monkeypatch.setattr(cli, "_apply_release", fail_if_fetched)
+    assert _run("release", "set", "2024r-hi", "--no-fetch") == 0
+    assert "Cached" not in capsys.readouterr().out
+    assert cli._read_config()["release"] == "2024r-hi"
+
+
+def test_release_set_json_reports_cached_count(capsys, monkeypatch):
+    monkeypatch.setattr(cli, "_apply_release", lambda *a, **kw: None)
+    monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: ["301204"])
+    _run("--json", "release", "set", "2024r-hi")
+    assert json.loads(capsys.readouterr().out)["datasets_cached"] == 1
 
 
 def test_release_set_rejects_unknown_release(capsys):
@@ -280,8 +329,14 @@ def test_release_set_rejects_unknown_release(capsys):
 def test_release_unset_forgets_choice(capsys):
     cli._write_config({"release": "2024r-hi"})
     _run("release", "unset")
-    assert json.loads(capsys.readouterr().out)["release"] is None
+    assert "Saved release cleared" in capsys.readouterr().out
     assert "release" not in cli._read_config()
+
+
+def test_release_unset_json_reports_null(capsys):
+    cli._write_config({"release": "2024r-hi"})
+    _run("--json", "release", "unset")
+    assert json.loads(capsys.readouterr().out)["release"] is None
 
 
 def test_release_set_reports_write_failure(capsys, monkeypatch):
@@ -440,30 +495,72 @@ def test_weights_commands(capsys, monkeypatch, no_metadata_load, argv, func_name
 # --- cache group ---
 
 
-def test_cache_info_lists_cached_releases(capsys, tmp_path):
+def test_cache_info_json_lists_cached_releases(capsys, tmp_path):
     _write_cache_file(tmp_path / "cache" / "metadata-2024r-pp.json")
-    _run("cache", "info")
+    _run("--json", "cache", "info")
     out = json.loads(capsys.readouterr().out)
     assert [e["release"] for e in out["entries"]] == ["2024r-pp"]
     assert out["entries"][0]["stale"] is False
 
 
-def test_cache_info_is_empty_when_nothing_cached(capsys):
+def test_cache_info_prints_readable_table(capsys, tmp_path):
+    _write_cache_file(tmp_path / "cache" / "metadata-2024r-pp.json")
     _run("cache", "info")
+    out = capsys.readouterr().out
+    assert "Cache directory:" in out
+    assert "2024r-pp" in out and "fresh" in out
+
+
+def test_cache_info_json_is_empty_when_nothing_cached(capsys):
+    _run("--json", "cache", "info")
     assert json.loads(capsys.readouterr().out)["entries"] == []
+
+
+def test_cache_info_says_so_when_nothing_cached(capsys):
+    _run("cache", "info")
+    assert "No releases cached." in capsys.readouterr().out
+
+
+def test_cache_info_reports_stale_entries(capsys, tmp_path):
+    cached = tmp_path / "cache" / "metadata-2024r-pp.json"
+    _write_cache_file(cached)
+    stale = time.time() - (cli._METADATA_CACHE_TTL_SECONDS + 86400)
+    os.utime(cached, (stale, stale))
+    _run("cache", "info")
+    assert "stale" in capsys.readouterr().out
 
 
 def test_cache_clear_removes_cached_releases(capsys, tmp_path):
     cached = tmp_path / "cache" / "metadata-2024r-pp.json"
     _write_cache_file(cached)
-    _run("cache", "clear")
+    _run("--json", "cache", "clear")
     assert json.loads(capsys.readouterr().out)["removed"] == [str(cached)]
     assert not cached.exists()
 
 
-def test_cache_clear_is_a_noop_when_nothing_cached(capsys):
+def test_cache_clear_prints_count(capsys, tmp_path):
+    _write_cache_file(tmp_path / "cache" / "metadata-2024r-pp.json")
     _run("cache", "clear")
+    assert "Cleared 1 cached release." in capsys.readouterr().out
+
+
+def test_cache_clear_is_a_noop_when_nothing_cached(capsys):
+    _run("--json", "cache", "clear")
     assert json.loads(capsys.readouterr().out)["removed"] == []
+
+
+@pytest.mark.parametrize(
+    "seconds,expected",
+    [
+        (0, "just now"),
+        (90, "1 minute old"),
+        (7200, "2 hours old"),
+        (86400, "1 day old"),
+        (259200, "3 days old"),
+    ],
+)
+def test_format_age(seconds, expected):
+    assert cli._format_age(seconds) == expected
 
 
 def test_cache_localize_rewrites_and_persists(capsys, monkeypatch, tmp_path, no_metadata_load):
@@ -475,10 +572,17 @@ def test_cache_localize_rewrites_and_persists(capsys, monkeypatch, tmp_path, no_
 
     monkeypatch.setattr(_metadata_mod, "find_all_files", fake_find_all_files)
     monkeypatch.setattr(_metadata_mod, "get_current_release", lambda: "2024r-pp")
-    assert _run("cache", "localize", "/data", "--warn-missing") == 0
+    assert _run("--json", "cache", "localize", "/data", "--warn-missing") == 0
     assert captured == {"local_path": "/data", "warnmissing": True}
     assert json.loads(capsys.readouterr().out)["localized"] == "/data"
     assert (tmp_path / "cache" / "metadata-2024r-pp.json").exists()
+
+
+def test_cache_localize_prints_confirmation(capsys, monkeypatch, no_metadata_load):
+    monkeypatch.setattr(_metadata_mod, "find_all_files", lambda local_path, warnmissing: None)
+    monkeypatch.setattr(_metadata_mod, "get_current_release", lambda: "2024r-pp")
+    _run("cache", "localize", "/data")
+    assert "now points at /data" in capsys.readouterr().out
 
 
 # --- env group ---

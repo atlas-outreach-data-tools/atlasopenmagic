@@ -85,11 +85,23 @@ The command groups are:
 
 Run `atom --help` or `atom <group> <command> --help` for the full set of options. The deprecated library functions (`get_urls_data`, `build_mc_dataset`, `build_data_dataset`) are intentionally not exposed; use `dataset urls` and `dataset build` instead.
 
+### Output
+Commands that return data (`dataset urls`, `dataset show`, `metadata dump`, `weights ...`) print JSON, so they pipe straight into `jq`. Commands that report state (`release show`, `release list`, `cache info`) print a short human-readable summary instead. Pass `--json` to force JSON everywhere:
+```bash
+atom release show            # Release: 2024r-pp / Source: config / Cache: fresh, just now
+atom --json release show     # {"cache": "fresh, just now", "release": "2024r-pp", ...}
+```
+
 ### Release selection
 Each invocation is a separate process, so the release is resolved from, in order of precedence: the `--release` flag, the `ATLAS_RELEASE` environment variable, the release saved by `atom release set` (in `~/.config/atlasopenmagic/config.json`), and finally the library default. `atom release show` reports which one is in effect and where it came from.
 
 ### Caching
-Because nothing persists in memory between invocations, the CLI caches each release's metadata under `~/.cache/atlasopenmagic/` so repeated commands don't refetch the whole release. Entries expire after 7 days. Use `--refresh` to bypass the cache for one command, `atom cache info` to see what is cached, and `atom cache clear` to delete it. The cache is disposable: deleting it only costs one refetch.
+Because nothing persists in memory between invocations, the CLI caches each release's metadata under `~/.cache/atlasopenmagic/` so repeated commands don't refetch the whole release. `atom release set` downloads and caches the release up front, so the wait happens where you asked for it rather than on whichever query you happen to run first; pass `--no-fetch` to just save the setting. After that, queries are served from disk:
+```bash
+atom release set 2024r-pp    # fetches once, ~1.3s
+atom dataset list            # served from cache, ~0.1s, no network
+```
+Entries expire after 7 days. Use `--refresh` to bypass the cache for one command, `atom cache info` to see what is cached, and `atom cache clear` to delete it. The cache is disposable: deleting it only costs one refetch.
 
 `atom metadata import` loads a previously exported file into that cache under a name of your choice, which can then be selected like any other release:
 ```bash
