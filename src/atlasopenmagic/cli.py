@@ -8,11 +8,10 @@ the update notice) go to stderr.
 
 Unlike a Python session, each CLI invocation is a fresh process, so the
 library's in-memory release selection and metadata cache do not survive
-between commands. Two pieces of on-disk state make up for that:
-
-* a config file holding the release chosen with `atom release set`, and
-* a per-release metadata cache, so repeated commands don't refetch the
-  whole release from the API every time.
+between commands. Two pieces of on-disk state make up for that: a config
+file holding the release chosen with `atom release set`, and a per-release
+metadata cache, so repeated commands don't refetch the whole release from
+the API every time.
 
 Deprecated library functions (`get_urls_data`, `build_mc_dataset`,
 `build_data_dataset`) are deliberately not exposed here; their replacements
@@ -30,9 +29,11 @@ from importlib.metadata import PackageNotFoundError, version
 
 import requests
 
-from . import metadata as _metadata
-from . import utils as _utils
-from . import weights as _weights
+# Absolute imports: lazydocs loads each module without package context, and
+# relative imports break its docs generation (see commit 5c7eb09).
+from atlasopenmagic import metadata as _metadata
+from atlasopenmagic import utils as _utils
+from atlasopenmagic import weights as _weights
 
 _PACKAGE_NAME = "atlasopenmagic"
 _PYPI_URL = f"https://pypi.org/pypi/{_PACKAGE_NAME}/json"
