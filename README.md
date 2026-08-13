@@ -60,6 +60,18 @@ And get the URLs for the one that's to be used:
 all_mc = atom.get_urls('data')
 ```
 
+## Command-line interface
+Installing the package also installs a CLI, available as both `atlasopenmagic` and the shorter `atom`. It covers the read-only lookups (metadata, URLs, weights) and prints JSON to stdout, so it composes well with tools like `jq` or with shell scripts:
+```bash
+atom --release 2024r-pp metadata 301204 --field cross_section_pb
+atom urls 301204 --skim exactly4lep --protocol https
+atom search process "pp>Zprime>ee"
+atom weights 301204
+```
+Run `atom --help` or `atom <command> --help` for the full list of commands and options. Since it wraps read-only lookups, it doesn't cover functions with local side effects or that return non-serializable Python objects (`build_dataset`, `install_from_environment`, etc.) — use the Python API for those.
+
+The CLI checks PyPI at most once a day for a newer release and prints a short notice to stderr if one is available; it never runs on a plain `import atlasopenmagic`. Disable it with `--no-update-check` or by setting `ATLASOPENMAGIC_NO_UPDATE_CHECK=1`.
+
 
 ## Contributing
 Contributions are welcome! To contribute:
