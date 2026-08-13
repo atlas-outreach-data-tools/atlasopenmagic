@@ -61,15 +61,44 @@ all_mc = atom.get_urls('data')
 ```
 
 ## Command-line interface
-Installing the package also installs a CLI, available as both `atlasopenmagic` and the shorter `atom`. It covers the read-only lookups (metadata, URLs, weights) and prints JSON to stdout, so it composes well with tools like `jq` or with shell scripts:
-```bash
-atom --release 2024r-pp metadata 301204 --field cross_section_pb
-atom urls 301204 --skim exactly4lep --protocol https
-atom search process "pp>Zprime>ee"
-atom weights 301204
-```
-Run `atom --help` or `atom <command> --help` for the full list of commands and options. Since it wraps read-only lookups, it doesn't cover functions with local side effects or that return non-serializable Python objects (`build_dataset`, `install_from_environment`, etc.) — use the Python API for those.
+Installing the package also installs a CLI, available as both `atlasopenmagic` and the shorter `atom`. It follows a `atom <group> <command> [arguments] [options]` layout and prints JSON to stdout, so it composes well with tools like `jq` or with shell scripts.
 
+Pick a release once, then query without repeating yourself:
+```bash
+atom release set 2024r-pp
+atom dataset show 301204 --field cross_section_pb
+atom dataset urls 301204 --protocol https
+atom dataset search process "pp>Zprime>ee"
+atom weights names 301204
+```
+
+The command groups are:
+
+| Group | Commands |
+|---|---|
+| `release` | `list`, `show`, `set <name>`, `unset` |
+| `dataset` | `list`, `show <key>`, `urls <key>`, `search <field> <value>`, `build <defs.json>` |
+| `metadata` | `fields`, `keywords`, `skims`, `dump`, `export <file>`, `import <file>` |
+| `weights` | `show <key>`, `names <key>`, `list` |
+| `cache` | `info`, `clear`, `localize <path>` |
+| `env` | `install [packages...]` |
+
+Run `atom --help` or `atom <group> <command> --help` for the full set of options. The deprecated library functions (`get_urls_data`, `build_mc_dataset`, `build_data_dataset`) are intentionally not exposed; use `dataset urls` and `dataset build` instead.
+
+### Release selection
+Each invocation is a separate process, so the release is resolved from, in order of precedence: the `--release` flag, the `ATLAS_RELEASE` environment variable, the release saved by `atom release set` (in `~/.config/atlasopenmagic/config.json`), and finally the library default. `atom release show` reports which one is in effect and where it came from.
+
+### Caching
+Because nothing persists in memory between invocations, the CLI caches each release's metadata under `~/.cache/atlasopenmagic/` so repeated commands don't refetch the whole release. Entries expire after 7 days. Use `--refresh` to bypass the cache for one command, `atom cache info` to see what is cached, and `atom cache clear` to delete it. The cache is disposable: deleting it only costs one refetch.
+
+`atom metadata import` loads a previously exported file into that cache under a name of your choice, which can then be selected like any other release:
+```bash
+atom metadata export snapshot.json
+atom metadata import snapshot.json --as-release mysnapshot
+atom --release mysnapshot dataset list
+```
+
+### Update notification
 The CLI checks PyPI at most once a day for a newer release and prints a short notice to stderr if one is available; it never runs on a plain `import atlasopenmagic`. Disable it with `--no-update-check` or by setting `ATLASOPENMAGIC_NO_UPDATE_CHECK=1`.
 
 
