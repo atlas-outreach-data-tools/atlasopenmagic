@@ -198,7 +198,7 @@ def test_apply_release_refetches_when_cache_is_corrupt(monkeypatch, tmp_path):
     cache_file.write_text("{ truncated")
 
     calls = []
-    monkeypatch.setattr(_metadata_mod, "set_release", lambda release: calls.append(release))
+    monkeypatch.setattr(_metadata_mod, "set_release", lambda release, **kw: calls.append(release))
     monkeypatch.setattr(cli, "_save_metadata_cache", lambda path: None)
     cli._apply_release("2024r-pp", refresh=False, needs_full=True)
     assert calls == ["2024r-pp"]
@@ -211,7 +211,7 @@ def test_apply_release_ignores_stale_cache(monkeypatch, tmp_path):
     os.utime(cache_file, (stale, stale))
 
     calls = []
-    monkeypatch.setattr(_metadata_mod, "set_release", lambda release: calls.append(release))
+    monkeypatch.setattr(_metadata_mod, "set_release", lambda release, **kw: calls.append(release))
     monkeypatch.setattr(cli, "_save_metadata_cache", lambda path: None)
     cli._apply_release("2024r-pp", refresh=False, needs_full=True)
     assert calls == ["2024r-pp"]
@@ -220,7 +220,7 @@ def test_apply_release_ignores_stale_cache(monkeypatch, tmp_path):
 def test_apply_release_refresh_bypasses_fresh_cache(monkeypatch, tmp_path):
     _write_cache_file(tmp_path / "cache" / "metadata-2024r-pp.json")
     calls = []
-    monkeypatch.setattr(_metadata_mod, "set_release", lambda release: calls.append(release))
+    monkeypatch.setattr(_metadata_mod, "set_release", lambda release, **kw: calls.append(release))
     monkeypatch.setattr(cli, "_save_metadata_cache", lambda path: None)
     cli._apply_release("2024r-pp", refresh=True, needs_full=True)
     assert calls == ["2024r-pp"]
@@ -236,7 +236,7 @@ def test_apply_release_is_lazy_when_full_metadata_not_needed(monkeypatch):
 
 
 def test_apply_release_writes_cache_after_fetching(monkeypatch, tmp_path):
-    def fake_set_release(release):
+    def fake_set_release(release, **kw):
         _metadata_mod._metadata = {"301204": {"dataset_number": "301204"}}
 
     monkeypatch.setattr(_metadata_mod, "set_release", fake_set_release)
@@ -257,6 +257,22 @@ def test_apply_release_rejects_unknown_release():
 def test_release_list_json_emits_all_releases(capsys):
     _run("--json", "release", "list")
     assert json.loads(capsys.readouterr().out) == _metadata_mod.RELEASES_DESC
+
+
+def test_release_list_includes_locally_imported_releases(capsys, tmp_path):
+    # G9: an imported release is selectable and shows in `cache info`, so it
+    # must not be missing from `release list`.
+    _write_cache_file(tmp_path / "cache" / "metadata-mysnap.json")
+    _run("release", "list")
+    out = capsys.readouterr().out
+    assert "mysnap" in out
+    assert "Imported locally" in out
+
+
+def test_release_list_json_includes_locally_imported_releases(capsys, tmp_path):
+    _write_cache_file(tmp_path / "cache" / "metadata-mysnap.json")
+    _run("--json", "release", "list")
+    assert "mysnap" in json.loads(capsys.readouterr().out)
 
 
 def test_release_list_marks_the_active_release(capsys):
@@ -295,7 +311,7 @@ def test_release_show_prints_readable_summary(capsys):
 
 def test_release_set_persists_choice_and_warms_cache(capsys, monkeypatch):
     applied = []
-    monkeypatch.setattr(cli, "_apply_release", lambda release, refresh, needs_full: applied.append(release))
+    monkeypatch.setattr(cli, "_apply_release", lambda release, *a, **kw: applied.append(release))
     monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: ["301204", "410470"])
     assert _run("release", "set", "2024r-hi") == 0
     assert applied == ["2024r-hi"]
@@ -433,6 +449,77 @@ def test_dataset_build_reports_missing_file(capsys, tmp_path, no_metadata_load):
     assert "Error:" in capsys.readouterr().err
 
 
+# --- dataset search value coercion (G1, G2, G3) ---
+
+
+@pytest.mark.parametrize(
+    "given,expected",
+    [
+        ("20000", 20000),  # G1: integer fields compare by identity
+        ("0.001762", 0.001762),
+        ('["top","Alternative"]', ["top", "Alternative"]),  # G2: AND matching
+        ("null", None),  # G3: find empty fields
+        ("pp>Zprime>ee", "pp>Zprime>ee"),  # not JSON -> stays text
+        ("2electron", "2electron"),
+    ],
+)
+def test_coerce_search_value(given, expected):
+    assert cli._coerce_search_value(given, raw=False) == expected
+
+
+def test_coerce_search_value_raw_keeps_text():
+    assert cli._coerce_search_value("20000", raw=True) == "20000"
+
+
+def test_search_sends_integers_not_strings(monkeypatch, no_metadata_load):
+    captured = {}
+    monkeypatch.setattr(
+        _metadata_mod,
+        "match_metadata",
+        lambda field, value, float_tolerance: captured.update(value=value) or [],
+    )
+    _run("dataset", "search", "nEvents", "20000")
+    assert captured["value"] == 20000
+    assert not isinstance(captured["value"], str)
+
+
+def test_search_raw_flag_forces_text(monkeypatch, no_metadata_load):
+    captured = {}
+    monkeypatch.setattr(
+        _metadata_mod,
+        "match_metadata",
+        lambda field, value, float_tolerance: captured.update(value=value) or [],
+    )
+    _run("dataset", "search", "nEvents", "20000", "--raw")
+    assert captured["value"] == "20000"
+
+
+# --- dataset build validation (G6, G7) ---
+
+
+@pytest.mark.parametrize(
+    "payload,expected",
+    [
+        (["not", "an", "object"], "must contain a JSON object"),
+        ({"Signal": "not-an-object"}, "must be an object"),
+        ({"Signal": {"color": "red"}}, "is missing 'dids'"),
+        ({"Signal": {"dids": "301204"}}, "'dids' as str"),
+        ({"Signal": {"dids": []}}, "empty 'dids'"),
+    ],
+)
+def test_dataset_build_rejects_malformed_definitions(capsys, tmp_path, no_metadata_load, payload, expected):
+    defs_file = tmp_path / "samples.json"
+    defs_file.write_text(json.dumps(payload))
+    assert _run("dataset", "build", str(defs_file)) == 1
+    err = capsys.readouterr().err
+    assert expected in err
+    assert "Traceback" not in err
+
+
+def test_validate_samples_defs_accepts_a_good_file():
+    cli._validate_samples_defs({"Signal": {"dids": [301204], "color": "red"}}, "f.json")
+
+
 # --- metadata group ---
 
 
@@ -475,6 +562,114 @@ def test_metadata_import_reports_missing_file(capsys, tmp_path):
     assert "Error:" in capsys.readouterr().err
 
 
+# --- local data path (G4) and page size (G5) ---
+
+
+def test_local_path_flag_beats_saved_config():
+    cli._write_config({"local_paths": {"2024r-pp": "/saved"}})
+    assert cli._resolve_local_path("2024r-pp", "/flag") == "/flag"
+
+
+def test_local_path_falls_back_to_saved_config():
+    cli._write_config({"local_paths": {"2024r-pp": "/saved"}})
+    assert cli._resolve_local_path("2024r-pp", None) == "/saved"
+
+
+def test_local_path_empty_flag_clears_saved_config():
+    cli._write_config({"local_paths": {"2024r-pp": "/saved"}})
+    assert cli._resolve_local_path("2024r-pp", "") is None
+
+
+def test_local_path_is_none_when_never_set():
+    assert cli._resolve_local_path("2024r-pp", None) is None
+
+
+def test_release_set_persists_local_path(capsys, monkeypatch, tmp_path):
+    monkeypatch.setattr(cli, "_apply_release", lambda *a, **kw: None)
+    monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: [])
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    _run("release", "set", "2024r-pp", "--local-path", str(data_dir))
+    assert cli._read_config()["local_paths"]["2024r-pp"] == str(data_dir)
+    assert f"Data path: {data_dir}" in capsys.readouterr().out
+
+
+def test_release_set_empty_local_path_removes_it(monkeypatch):
+    monkeypatch.setattr(cli, "_apply_release", lambda *a, **kw: None)
+    monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: [])
+    cli._write_config({"local_paths": {"2024r-pp": "/saved"}})
+    _run("release", "set", "2024r-pp", "--local-path", "")
+    assert "2024r-pp" not in cli._read_config()["local_paths"]
+
+
+def test_apply_local_path_sets_the_library_global(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    cli._apply_local_path(str(data_dir))
+    assert _metadata_mod.current_local_path == str(data_dir)
+    cli._apply_local_path(None)
+    assert _metadata_mod.current_local_path is None
+
+
+def test_apply_local_path_accepts_eos_without_warning(capsys):
+    cli._apply_local_path("eos")
+    assert _metadata_mod.current_local_path == "eos"
+    assert capsys.readouterr().err == ""
+
+
+def test_apply_local_path_warns_for_a_missing_directory(capsys):
+    cli._apply_local_path("/definitely/not/here")
+    assert "does not exist" in capsys.readouterr().err
+    assert _metadata_mod.current_local_path == "/definitely/not/here"
+
+
+def test_apply_release_applies_local_path_after_a_fetch(monkeypatch, tmp_path):
+    # set_release() resets current_local_path, so the ordering matters.
+    def fake_set_release(release, **kw):
+        _metadata_mod.current_local_path = None
+
+    monkeypatch.setattr(_metadata_mod, "set_release", fake_set_release)
+    monkeypatch.setattr(cli, "_save_metadata_cache", lambda path: None)
+    cli._apply_release("2024r-pp", refresh=False, needs_full=True, local_path="eos")
+    assert _metadata_mod.current_local_path == "eos"
+
+
+def test_release_show_reports_the_local_path(capsys):
+    cli._write_config({"release": "2024r-pp", "local_paths": {"2024r-pp": "eos"}})
+    _run("release", "show")
+    assert "Data:    eos" in capsys.readouterr().out
+
+
+def test_release_show_reports_remote_when_no_local_path(capsys):
+    _run("release", "show")
+    assert "Data:    remote" in capsys.readouterr().out
+
+
+def test_page_size_is_passed_to_set_release(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(_metadata_mod, "set_release", lambda release, **kw: captured.update(kw))
+    monkeypatch.setattr(cli, "_save_metadata_cache", lambda path: None)
+    cli._apply_release("2024r-pp", refresh=False, needs_full=True, page_size=250)
+    assert captured["page_size"] == 250
+
+
+def test_page_size_defaults_to_the_library_value(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(_metadata_mod, "set_release", lambda release, **kw: captured.update(kw))
+    monkeypatch.setattr(cli, "_save_metadata_cache", lambda path: None)
+    cli._apply_release("2024r-pp", refresh=False, needs_full=True)
+    assert captured["page_size"] == cli._DEFAULT_PAGE_SIZE
+
+
+def test_global_flags_reach_apply_release(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(cli, "_apply_release", lambda *a, **kw: captured.update(kw))
+    monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: [])
+    _run("--local-path", "eos", "--page-size", "500", "dataset", "list")
+    assert captured["local_path"] == "eos"
+    assert captured["page_size"] == 500
+
+
 # --- weights group ---
 
 
@@ -490,6 +685,35 @@ def test_weights_commands(capsys, monkeypatch, no_metadata_load, argv, func_name
     monkeypatch.setattr(cli._weights, func_name, lambda *a, **kw: fake_return)
     assert _run(*argv) == 0
     assert json.loads(capsys.readouterr().out) == fake_return
+
+
+def test_weights_list_no_longer_accepts_for_release(capsys):
+    # G8: the library only supports the current release, so --release is the
+    # single (validated) way to choose one.
+    with pytest.raises(SystemExit):
+        _run("weights", "list", "--for-release", "2024r-hi")
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+def test_weights_list_asks_for_the_active_release_only(monkeypatch, no_metadata_load):
+    captured = {}
+    monkeypatch.setattr(
+        cli._weights,
+        "get_all_weights_for_release",
+        lambda *a, **kw: captured.update(args=a, kwargs=kw) or {},
+    )
+    _run("weights", "list")
+    assert captured == {"args": (), "kwargs": {}}
+
+
+def test_weights_list_loads_full_metadata(monkeypatch):
+    # get_all_weights_for_release() walks available_datasets(), so the whole
+    # release has to be loaded (and therefore cached).
+    captured = {}
+    monkeypatch.setattr(cli, "_apply_release", lambda *a, **kw: captured.update(needs_full=a[2]))
+    monkeypatch.setattr(cli._weights, "get_all_weights_for_release", lambda *a, **kw: {})
+    _run("weights", "list")
+    assert captured["needs_full"] is True
 
 
 # --- cache group ---
@@ -612,7 +836,7 @@ def test_env_install_with_no_packages_installs_all(capsys, monkeypatch):
 def test_release_flag_overrides_saved_release(monkeypatch):
     cli._write_config({"release": "2020e-13tev"})
     applied = []
-    monkeypatch.setattr(cli, "_apply_release", lambda release, refresh, needs_full: applied.append(release))
+    monkeypatch.setattr(cli, "_apply_release", lambda release, *a, **kw: applied.append(release))
     monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: [])
     _run("--release", "2024r-pp", "dataset", "list")
     assert applied == ["2024r-pp"]
@@ -621,8 +845,8 @@ def test_release_flag_overrides_saved_release(monkeypatch):
 def test_refresh_flag_is_passed_to_apply_release(monkeypatch):
     captured = {}
 
-    def fake_apply(release, refresh, needs_full):
-        captured.update(release=release, refresh=refresh, needs_full=needs_full)
+    def fake_apply(release, refresh, needs_full, **kw):
+        captured.update(release=release, refresh=refresh, needs_full=needs_full, **kw)
 
     monkeypatch.setattr(cli, "_apply_release", fake_apply)
     monkeypatch.setattr(_metadata_mod, "available_datasets", lambda: [])
@@ -634,7 +858,7 @@ def test_refresh_flag_is_passed_to_apply_release(monkeypatch):
 def test_single_dataset_commands_do_not_request_full_metadata(monkeypatch):
     captured = {}
 
-    def fake_apply(release, refresh, needs_full):
+    def fake_apply(release, refresh, needs_full, **kw):
         captured.update(needs_full=needs_full)
 
     monkeypatch.setattr(cli, "_apply_release", fake_apply)

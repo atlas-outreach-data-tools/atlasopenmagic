@@ -83,6 +83,24 @@ The command groups are:
 | `cache` | `info`, `clear`, `localize <path>` |
 | `env` | `install [packages...]` |
 
+### Searching
+`dataset search` reads its value as JSON where it can, so searches keep the types the Python API expects:
+```bash
+atom dataset search nEvents 20000                     # number, not the string "20000"
+atom dataset search keywords '["2electron","BSM"]'    # requires both keywords
+atom dataset search Filters null                      # datasets where the field is empty
+atom dataset search process "pp>Zprime>ee"            # not valid JSON, so plain text
+atom dataset search keywords 2024 --raw               # force text for a numeric-looking value
+```
+
+### Reading data from disk
+If you already have the files locally, point the CLI at them and the URLs come back as paths:
+```bash
+atom release set 2024r-pp --local-path /data/atlas    # remembered for this release
+atom --local-path eos dataset urls 301204             # native POSIX /eos/... paths
+```
+`--local-path` on its own applies to a single command; on `release set` it is saved alongside the release. Use `atom cache localize <path>` instead when you want only the files that actually exist locally rewritten, leaving the rest as remote URLs.
+
 Run `atom --help` or `atom <group> <command> --help` for the full set of options. The deprecated library functions (`get_urls_data`, `build_mc_dataset`, `build_data_dataset`) are intentionally not exposed; use `dataset urls` and `dataset build` instead.
 
 ### Output

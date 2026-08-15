@@ -61,6 +61,12 @@ _METADATA_CACHE_TTL_SECONDS = 7 * 24 * 3600
 # Release names become filenames, so keep them to something obviously safe.
 _SAFE_RELEASE_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
+# Sentinel local path meaning "native POSIX EOS access", as set_release() accepts.
+_LOCAL_PATH_EOS = "eos"
+
+# Matches the library's own default for set_release(page_size=...).
+_DEFAULT_PAGE_SIZE = 1000
+
 
 # --- Update notification (CLI only; never runs on `import atlasopenmagic`) ---
 
@@ -241,9 +247,25 @@ def _save_metadata_cache(cache_file: str) -> None:
         pass  # Same as the update cache: never fail a command over a cache write.
 
 
-def _apply_release(release: str, refresh: bool, needs_full: bool) -> None:
-    """Point the library at `release`, loading metadata from cache where possible."""
-    _validate_release(release)
+def _resolve_local_path(release: str, cli_local_path):
+    """Resolve the local data path for `release`: flag first, then saved config."""
+    if cli_local_path is not None:
+        return cli_local_path or None  # An empty --local-path clears it for this run.
+    return _read_config().get("local_paths", {}).get(release)
+
+
+def _apply_local_path(local_path) -> None:
+    """Point the library at a local copy of the data, as set_release(local_path=...) does."""
+    if local_path and local_path != _LOCAL_PATH_EOS and not os.path.isdir(local_path):
+        print(
+            f"Warning: local path '{local_path}' does not exist; URLs will point at it anyway.",
+            file=sys.stderr,
+        )
+    _metadata.current_local_path = local_path
+
+
+def _load_metadata_for(release: str, refresh: bool, needs_full: bool, page_size) -> None:
+    """Populate the library's metadata cache for `release`, from disk where possible."""
     cache_file = _metadata_cache_path(release)
 
     age = None if refresh else _cache_age(cache_file)
@@ -261,8 +283,16 @@ def _apply_release(release: str, refresh: bool, needs_full: bool) -> None:
         _metadata.current_release = release
         return
 
-    _metadata.set_release(release)
+    _metadata.set_release(release, page_size=page_size or _DEFAULT_PAGE_SIZE)
     _save_metadata_cache(cache_file)
+
+
+def _apply_release(release: str, refresh: bool, needs_full: bool, local_path=None, page_size=None) -> None:
+    """Point the library at `release`, loading metadata from cache where possible."""
+    _validate_release(release)
+    _load_metadata_for(release, refresh, needs_full, page_size)
+    # Applied last: set_release() resets current_local_path, so this has to win.
+    _apply_local_path(local_path)
 
 
 # --- Output helpers ---
@@ -275,6 +305,47 @@ def _emit(data):
 def _read_json_file(path: str):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _coerce_search_value(value: str, raw: bool):
+    """Turn a command-line search value into the type match_metadata expects.
+
+    A shell can only hand over strings, but match_metadata compares some fields
+    by identity: searching an integer field for "20000" silently matches nothing
+    where 20000 matches. Reading the value as JSON recovers ints, floats, lists
+    (which match_metadata treats as AND-matching) and null, while anything that
+    isn't valid JSON stays the plain string it already was.
+    """
+    if raw:
+        return value
+    try:
+        return json.loads(value)
+    except ValueError:
+        return value
+
+
+def _validate_samples_defs(samples_defs, path: str) -> None:
+    """Check a `dataset build` definitions file before handing it to the library.
+
+    build_dataset() iterates `info["dids"]` directly, so a missing key raises a
+    bare KeyError and a string is iterated character by character. Both are easy
+    mistakes to make in a hand-written file, so catch them with a message that
+    names the offending sample.
+    """
+    if not isinstance(samples_defs, dict):
+        raise ValueError(f"{path} must contain a JSON object mapping sample names to definitions.")
+    for name, info in samples_defs.items():
+        if not isinstance(info, dict):
+            raise ValueError(f"{path}: sample '{name}' must be an object with a 'dids' list.")
+        if "dids" not in info:
+            raise ValueError(f"{path}: sample '{name}' is missing 'dids'.")
+        if not isinstance(info["dids"], list):
+            raise ValueError(
+                f"{path}: sample '{name}' has 'dids' as {type(info['dids']).__name__}; "
+                'it must be a list, e.g. "dids": ["301204"].'
+            )
+        if not info["dids"]:
+            raise ValueError(f"{path}: sample '{name}' has an empty 'dids' list.")
 
 
 def _format_age(seconds: float) -> str:
@@ -298,44 +369,91 @@ def _describe_cache(release: str) -> str:
 # --- release ---
 
 
+def _release_catalogue() -> dict[str, str]:
+    """Every selectable release: the published ones, plus anything imported locally."""
+    catalogue = dict(_metadata.RELEASES_DESC)
+    for name in _known_releases():
+        if name not in catalogue:
+            catalogue[name] = "Imported locally with `metadata import`."
+    return catalogue
+
+
 def _cmd_release_list(args):
+    catalogue = _release_catalogue()
     if args.json:
-        _emit(_metadata.RELEASES_DESC)
+        _emit(catalogue)
         return
     active, _ = _resolve_release(args.release)
-    width = max(len(name) for name in _metadata.RELEASES_DESC)
-    for name, description in _metadata.RELEASES_DESC.items():
+    width = max(len(name) for name in catalogue)
+    for name, description in catalogue.items():
         marker = "*" if name == active else " "
         print(f"{marker} {name.ljust(width)}  {description}")
 
 
 def _cmd_release_show(args):
     release, source = _resolve_release(args.release)
+    local_path = _resolve_local_path(release, args.local_path)
     if args.json:
-        _emit({"release": release, "source": source, "cache": _describe_cache(release)})
+        _emit(
+            {
+                "release": release,
+                "source": source,
+                "cache": _describe_cache(release),
+                "local_path": local_path,
+            }
+        )
         return
     print(f"Release: {release}")
     print(f"Source:  {source}")
     print(f"Cache:   {_describe_cache(release)}")
+    print(f"Data:    {local_path or 'remote'}")
 
 
 def _cmd_release_set(args):
     _validate_release(args.name)
     config = _read_config()
     config["release"] = args.name
+
+    # The local path is per-release state, so it is stored per release rather
+    # than as a single global setting. `release set --local-path` wins over a
+    # global --local-path given before the subcommand.
+    chosen_local_path = args.set_local_path if args.set_local_path is not None else args.local_path
+    if chosen_local_path is not None:
+        local_paths = config.setdefault("local_paths", {})
+        if chosen_local_path:
+            local_paths[args.name] = chosen_local_path
+        else:
+            local_paths.pop(args.name, None)
     _write_config(config)
+
+    local_path = _resolve_local_path(args.name, chosen_local_path)
 
     # Warm the cache now, so the cost of fetching a release is paid here where
     # the user asked for it, rather than ambushing whichever query comes first.
     cached = None
     if not args.no_fetch:
-        _apply_release(args.name, refresh=args.refresh, needs_full=True)
+        _apply_release(
+            args.name,
+            refresh=args.refresh,
+            needs_full=True,
+            local_path=local_path,
+            page_size=args.page_size,
+        )
         cached = len(_metadata.available_datasets())
 
     if args.json:
-        _emit({"release": args.name, "config_file": _CONFIG_PATH, "datasets_cached": cached})
+        _emit(
+            {
+                "release": args.name,
+                "config_file": _CONFIG_PATH,
+                "datasets_cached": cached,
+                "local_path": local_path,
+            }
+        )
         return
     print(f"Release set to {args.name} ({_CONFIG_PATH}).")
+    if local_path:
+        print(f"Data path: {local_path}")
     if cached is not None:
         print(f"Cached {cached} datasets.")
 
@@ -370,13 +488,13 @@ def _cmd_dataset_urls(args):
 
 
 def _cmd_dataset_search(args):
-    _emit(_metadata.match_metadata(args.field, args.value, float_tolerance=args.tolerance))
+    value = _coerce_search_value(args.value, args.raw)
+    _emit(_metadata.match_metadata(args.field, value, float_tolerance=args.tolerance))
 
 
 def _cmd_dataset_build(args):
     samples_defs = _read_json_file(args.definitions)
-    if not isinstance(samples_defs, dict):
-        raise ValueError(f"{args.definitions} must contain a JSON object mapping sample names to definitions.")
+    _validate_samples_defs(samples_defs, args.definitions)
     _emit(
         _utils.build_dataset(
             samples_defs,
@@ -429,8 +547,10 @@ def _cmd_weights_names(args):
     _emit(_weights.get_weight_names(args.key, e_tag=args.e_tag))
 
 
-def _cmd_weights_list(args):
-    _emit(_weights.get_all_weights_for_release(release_name=args.for_release))
+def _cmd_weights_list(_args):
+    # Always the active release: the library only supports the current one, so
+    # the global --release (which is validated) is the single way to choose it.
+    _emit(_weights.get_all_weights_for_release())
 
 
 # --- cache ---
@@ -519,6 +639,16 @@ def _add_release_commands(sub):
         action="store_true",
         help="Save the setting without downloading the release's metadata",
     )
+    # A separate dest from the global --local-path: sharing one would let this
+    # subparser's default clobber a value given before the subcommand.
+    p.add_argument(
+        "--local-path",
+        dest="set_local_path",
+        help=(
+            "Remember a local data directory for this release, "
+            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to forget it."
+        ),
+    )
     p.set_defaults(func=_cmd_release_set)
     group.add_parser("unset", help="Forget the saved release").set_defaults(func=_cmd_release_unset)
 
@@ -549,7 +679,15 @@ def _add_dataset_commands(sub):
 
     p = group.add_parser("search", help="Find datasets whose metadata field matches a value")
     p.add_argument("field", help="Metadata field to search, e.g. process")
-    p.add_argument("value", help="Value to match")
+    p.add_argument(
+        "value",
+        help=(
+            "Value to match, read as JSON where possible: 20000 matches a number, "
+            '\'["top","Alternative"]\' requires both, null finds empty fields, '
+            "anything else is treated as text"
+        ),
+    )
+    p.add_argument("--raw", action="store_true", help="Treat the value as plain text, never as JSON")
     p.add_argument("--tolerance", type=float, default=0.01, help="Fractional tolerance for float fields")
     p.set_defaults(func=_cmd_dataset_search, needs_full=True)
 
@@ -606,9 +744,10 @@ def _add_weights_commands(sub):
     p.add_argument("--e-tag", dest="e_tag")
     p.set_defaults(func=_cmd_weights_names)
 
-    p = group.add_parser("list", help="List weight names for every dataset in a release")
-    p.add_argument("--for-release", dest="for_release", help="Defaults to the active release")
-    p.set_defaults(func=_cmd_weights_list)
+    # Needs the whole release loaded: the library walks available_datasets().
+    group.add_parser("list", help="List weight names for every dataset in the active release").set_defaults(
+        func=_cmd_weights_list, needs_full=True
+    )
 
 
 def _add_cache_commands(sub):
@@ -651,6 +790,14 @@ def _build_parser():
     )
     parser.add_argument("--release", help="Release to use for this command, overriding any saved setting")
     parser.add_argument(
+        "--local-path",
+        dest="local_path",
+        help=(
+            "Read data from this directory instead of streaming it, "
+            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to ignore a saved path."
+        ),
+    )
+    parser.add_argument(
         "--verbosity",
         choices=["error", "warning", "info", "debug"],
         help="Log verbosity for the underlying API calls",
@@ -661,6 +808,12 @@ def _build_parser():
         help="Ignore cached metadata and refetch from the API",
     )
     parser.add_argument(
+        "--page-size",
+        dest="page_size",
+        type=int,
+        help=f"Datasets to request per API call when fetching a release (default {_DEFAULT_PAGE_SIZE})",
+    )
+    parser.add_argument(
         "--no-update-check",
         action="store_true",
         help="Skip the PyPI check for a newer atlasopenmagic release",
@@ -668,7 +821,7 @@ def _build_parser():
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Force JSON output for commands that otherwise print for humans",
+        help="Print JSON from `release show`, `release list` and `cache info` too (other commands always do)",
     )
 
     # Most commands only read one dataset; those needing the whole release
@@ -702,7 +855,13 @@ def main(argv=None) -> int:
     try:
         if args.loads_metadata:
             release, _ = _resolve_release(args.release)
-            _apply_release(release, args.refresh, args.needs_full)
+            _apply_release(
+                release,
+                args.refresh,
+                args.needs_full,
+                local_path=_resolve_local_path(release, args.local_path),
+                page_size=args.page_size,
+            )
         args.func(args)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
