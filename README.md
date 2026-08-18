@@ -61,9 +61,9 @@ all_mc = atom.get_urls('data')
 ```
 
 ## Command-line interface
-Installing the package also installs a CLI, available as both `atlasopenmagic` and the shorter `atom`. It follows a `atom <group> <command> [arguments] [options]` layout and prints JSON to stdout, so it composes well with tools like `jq` or with shell scripts.
+Installing the package also installs a CLI, available as both `atlasopenmagic` and the shorter `atom`. The two are the same program, so if `atom` clashes with something else on your machine, `atlasopenmagic` always works and can be aliased to whatever you prefer. It follows a `atom <group> <command> [arguments] [options]` layout and prints JSON to stdout, so it composes well with tools like `jq` or with shell scripts.
 
-Pick a release once, then query without repeating yourself:
+Pick a release once, then query without having to repeat yourself:
 ```bash
 atom release set 2024r-pp
 atom dataset show 301204 --field cross_section_pb
@@ -93,6 +93,8 @@ atom dataset search process "pp>Zprime>ee"            # not valid JSON, so plain
 atom dataset search keywords 2024 --raw               # force text for a numeric-looking value
 ```
 
+Quote lists and objects, or the shell will take them apart before `atom` ever sees them: `zsh` reads the brackets as a filename pattern and refuses to run the command, while `bash` strips the inner quotes and hands over `[2electron,BSM]`, which is no longer valid JSON. The CLI warns when it receives a value that opens like a list but doesn't parse, rather than silently searching for it as text.
+
 ### Reading data from disk
 If you already have the files locally, point the CLI at them and the URLs come back as paths:
 ```bash
@@ -104,7 +106,7 @@ atom --local-path eos dataset urls 301204             # native POSIX /eos/... pa
 Run `atom --help` or `atom <group> <command> --help` for the full set of options. The deprecated library functions (`get_urls_data`, `build_mc_dataset`, `build_data_dataset`) are intentionally not exposed; use `dataset urls` and `dataset build` instead.
 
 ### Output
-Commands that return data (`dataset urls`, `dataset show`, `metadata dump`, `weights ...`) print JSON, so they pipe straight into `jq`. Commands that report state (`release show`, `release list`, `cache info`) print a short human-readable summary instead. Pass `--json` to force JSON everywhere:
+Commands that return data (`dataset urls`, `dataset show`, `metadata dump`, `weights ...`) print JSON, so they can be piped straight into `jq`. Commands that report state (`release show`, `release list`, `cache info`) print a short human-readable summary instead. Pass `--json` to force JSON everywhere:
 ```bash
 atom release show            # Release: 2024r-pp / Source: config / Cache: fresh, just now
 atom --json release show     # {"cache": "fresh, just now", "release": "2024r-pp", ...}
@@ -129,7 +131,7 @@ atom --release mysnapshot dataset list
 ```
 
 ### Update notification
-The CLI checks PyPI at most once a day for a newer release and prints a short notice to stderr if one is available; it never runs on a plain `import atlasopenmagic`. Disable it with `--no-update-check` or by setting `ATLASOPENMAGIC_NO_UPDATE_CHECK=1`.
+The CLI checks PyPI at most once a day for a newer release and prints a short notice to stderr if one is available. The check belongs to the CLI alone: using the package from Python (`import atlasopenmagic`) never triggers it, so imports in notebooks and scripts stay offline and just as fast as before. Disable it with `--no-update-check` or by setting `ATLASOPENMAGIC_NO_UPDATE_CHECK=1`.
 
 
 ## Contributing

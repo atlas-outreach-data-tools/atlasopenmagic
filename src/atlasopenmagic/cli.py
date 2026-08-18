@@ -13,6 +13,10 @@ file holding the release chosen with `atom release set`, and a per-release
 metadata cache, so repeated commands don't refetch the whole release from
 the API every time.
 
+The module is laid out in the order a command flows through it: update check,
+config, release resolution, metadata cache, output helpers, one `_cmd_*`
+handler per command, then the parser builders that wire them together.
+
 Deprecated library functions (`get_urls_data`, `build_mc_dataset`,
 `build_data_dataset`) are deliberately not exposed here; their replacements
 are `dataset urls` and `dataset build`.
@@ -26,6 +30,7 @@ import sys
 import threading
 import time
 from importlib.metadata import PackageNotFoundError, version
+from typing import Any, Optional
 
 import requests
 
@@ -34,6 +39,16 @@ import requests
 from atlasopenmagic import metadata as _metadata
 from atlasopenmagic import utils as _utils
 from atlasopenmagic import weights as _weights
+
+# argparse's subparser action has no public name, so alias the private one once
+# here rather than repeating it in every parser builder's annotation. A `sub`
+# argument below is always the object returned by `parser.add_subparsers()`, on
+# which `.add_parser(...)` creates one command.
+_SubParsers = argparse._SubParsersAction  # pylint: disable=protected-access
+
+# The background update check hands back the thread it started plus the dict
+# that thread writes its result into.
+_UpdateCheck = Optional[tuple[threading.Thread, dict]]
 
 _PACKAGE_NAME = "atlasopenmagic"
 _PYPI_URL = f"https://pypi.org/pypi/{_PACKAGE_NAME}/json"
@@ -61,6 +76,10 @@ _METADATA_CACHE_TTL_SECONDS = 7 * 24 * 3600
 # Release names become filenames, so keep them to something obviously safe.
 _SAFE_RELEASE_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
+# A search value that opens with a bracket was almost certainly meant to be a
+# JSON list or object; see _coerce_search_value for why that matters.
+_LOOKS_STRUCTURED_RE = re.compile(r"^\s*[\[{]")
+
 # Sentinel local path meaning "native POSIX EOS access", as set_release() accepts.
 _LOCAL_PATH_EOS = "eos"
 
@@ -68,20 +87,26 @@ _LOCAL_PATH_EOS = "eos"
 _DEFAULT_PAGE_SIZE = 1000
 
 
-# --- Update notification (CLI only; never runs on `import atlasopenmagic`) ---
+# --- Update notification ---
+#
+# This runs only from the CLI. Importing atlasopenmagic in a script or notebook
+# never reaches this module, so no import is ever slowed down or made to touch
+# the network by it.
 
 
-def _installed_version():
+def _installed_version() -> Optional[str]:
+    """Version of the installed package, or None if it isn't installed (e.g. run from a source tree)."""
     try:
         return version(_PACKAGE_NAME)
     except PackageNotFoundError:
         return None
 
 
-def _version_tuple(v):
+def _version_tuple(v: str) -> tuple[int, ...]:
     """Loose numeric-prefix comparison, good enough for this package's plain X.Y.Z versions."""
     parts = []
     for chunk in v.split("."):
+        # Stop at the first non-digit so a suffix like "1rc2" still compares as 1.
         digits = ""
         for ch in chunk:
             if not ch.isdigit():
@@ -91,7 +116,8 @@ def _version_tuple(v):
     return tuple(parts)
 
 
-def _read_cache():
+def _read_cache() -> dict:
+    """Read the update-check cache, treating an unreadable or malformed file as empty."""
     try:
         with open(_CACHE_PATH, encoding="utf-8") as f:
             return json.load(f)
@@ -99,7 +125,8 @@ def _read_cache():
         return {}
 
 
-def _write_cache(data):
+def _write_cache(data: dict) -> None:
+    """Record when PyPI was last checked, so the next run can skip the network."""
     try:
         os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
         with open(_CACHE_PATH, "w", encoding="utf-8") as f:
@@ -108,7 +135,12 @@ def _write_cache(data):
         pass  # Caching is a nice-to-have; never fail the command over it.
 
 
-def _fetch_latest_version():
+def _fetch_latest_version() -> Optional[str]:
+    """Ask PyPI for the newest published version, or None if that doesn't work out.
+
+    Every failure is deliberately equivalent to "don't know": this is a courtesy
+    notice, so being offline or behind a proxy must not disturb the real command.
+    """
     try:
         resp = requests.get(_PYPI_URL, timeout=2)
         resp.raise_for_status()
@@ -117,12 +149,13 @@ def _fetch_latest_version():
         return None
 
 
-def _check_for_update(result: dict):
+def _check_for_update(result: dict) -> None:
     """Populate result['notice'] if a newer release is available. Runs in a background thread."""
     installed = _installed_version()
     if not installed:
         return
 
+    # At most one PyPI request a day; in between, reuse the cached answer.
     cache = _read_cache()
     now = time.time()
     if now - cache.get("checked_at", 0) < _CHECK_INTERVAL_SECONDS:
@@ -139,8 +172,12 @@ def _check_for_update(result: dict):
         )
 
 
-def _start_update_check(disabled: bool):
-    result = {}
+def _start_update_check(disabled: bool) -> _UpdateCheck:
+    """Start the update check in the background, or return None if it is switched off.
+
+    It runs concurrently with the actual command so the user never waits on it.
+    """
+    result: dict = {}
     if disabled or os.environ.get("ATLASOPENMAGIC_NO_UPDATE_CHECK"):
         return None
     thread = threading.Thread(target=_check_for_update, args=(result,), daemon=True)
@@ -148,7 +185,12 @@ def _start_update_check(disabled: bool):
     return thread, result
 
 
-def _print_update_notice(check):
+def _print_update_notice(check: _UpdateCheck) -> None:
+    """Print the notice if the check found one, waiting only briefly for it.
+
+    The thread is a daemon and the timeout is short, so a hung network request
+    delays exit by at most a couple of seconds and never blocks it.
+    """
     if check is None:
         return
     thread, result = check
@@ -185,6 +227,7 @@ def _write_config(data: dict) -> None:
 
 
 def _metadata_cache_path(release: str) -> str:
+    """Cache file for `release`, rejecting names that wouldn't be safe as a filename."""
     if not _SAFE_RELEASE_RE.match(release):
         raise ValueError(f"Invalid release name: '{release}'.")
     return os.path.join(_CACHE_DIR, f"metadata-{release}.json")
@@ -197,6 +240,8 @@ def _known_releases() -> list[str]:
         cached = os.listdir(_CACHE_DIR)
     except OSError:
         cached = []
+    # A cache file is the only trace an imported release leaves, so the filenames
+    # are what make `metadata import --as-release foo` selectable afterwards.
     for name in cached:
         if name.startswith("metadata-") and name.endswith(".json"):
             release = name[len("metadata-") : -len(".json")]
@@ -211,11 +256,12 @@ def _validate_release(release: str) -> None:
         raise ValueError(f"Invalid release '{release}'. Use one of: {', '.join(_known_releases())}")
 
 
-def _resolve_release(cli_release):
+def _resolve_release(cli_release: Optional[str]) -> tuple[str, str]:
     """Resolve the release to use, returning (release, source).
 
     Precedence follows the usual CLI convention: an explicit flag beats the
     environment, which beats saved config, which beats the library default.
+    The source is reported by `release show` so the choice is never a mystery.
     """
     if cli_release:
         return cli_release, "--release"
@@ -231,7 +277,7 @@ def _resolve_release(cli_release):
 # --- Metadata cache ---
 
 
-def _cache_age(path: str):
+def _cache_age(path: str) -> Optional[float]:
     """Age of `path` in seconds, or None if it doesn't exist."""
     try:
         return time.time() - os.path.getmtime(path)
@@ -240,6 +286,7 @@ def _cache_age(path: str):
 
 
 def _save_metadata_cache(cache_file: str) -> None:
+    """Write the library's currently loaded metadata to `cache_file`."""
     try:
         os.makedirs(os.path.dirname(cache_file), exist_ok=True)
         _metadata.save_metadata(cache_file)
@@ -247,15 +294,17 @@ def _save_metadata_cache(cache_file: str) -> None:
         pass  # Same as the update cache: never fail a command over a cache write.
 
 
-def _resolve_local_path(release: str, cli_local_path):
+def _resolve_local_path(release: str, cli_local_path: Optional[str]) -> Optional[str]:
     """Resolve the local data path for `release`: flag first, then saved config."""
     if cli_local_path is not None:
         return cli_local_path or None  # An empty --local-path clears it for this run.
     return _read_config().get("local_paths", {}).get(release)
 
 
-def _apply_local_path(local_path) -> None:
+def _apply_local_path(local_path: Optional[str]) -> None:
     """Point the library at a local copy of the data, as set_release(local_path=...) does."""
+    # Warn rather than fail: the path may be valid on the machine that will
+    # eventually consume the URLs, which isn't necessarily this one.
     if local_path and local_path != _LOCAL_PATH_EOS and not os.path.isdir(local_path):
         print(
             f"Warning: local path '{local_path}' does not exist; URLs will point at it anyway.",
@@ -264,7 +313,7 @@ def _apply_local_path(local_path) -> None:
     _metadata.current_local_path = local_path
 
 
-def _load_metadata_for(release: str, refresh: bool, needs_full: bool, page_size) -> None:
+def _load_metadata_for(release: str, refresh: bool, needs_full: bool, page_size: Optional[int]) -> None:
     """Populate the library's metadata cache for `release`, from disk where possible."""
     cache_file = _metadata_cache_path(release)
 
@@ -287,7 +336,13 @@ def _load_metadata_for(release: str, refresh: bool, needs_full: bool, page_size)
     _save_metadata_cache(cache_file)
 
 
-def _apply_release(release: str, refresh: bool, needs_full: bool, local_path=None, page_size=None) -> None:
+def _apply_release(
+    release: str,
+    refresh: bool,
+    needs_full: bool,
+    local_path: Optional[str] = None,
+    page_size: Optional[int] = None,
+) -> None:
     """Point the library at `release`, loading metadata from cache where possible."""
     _validate_release(release)
     _load_metadata_for(release, refresh, needs_full, page_size)
@@ -298,16 +353,23 @@ def _apply_release(release: str, refresh: bool, needs_full: bool, local_path=Non
 # --- Output helpers ---
 
 
-def _emit(data):
+def _emit(data: Any) -> None:
+    """Print a result as JSON on stdout.
+
+    Sorted keys keep output stable enough to diff between runs; `default=str`
+    is a backstop so an unexpected non-serialisable value degrades to its
+    string form instead of crashing the command.
+    """
     print(json.dumps(data, indent=2, sort_keys=True, default=str))
 
 
-def _read_json_file(path: str):
+def _read_json_file(path: str) -> Any:
+    """Load a JSON file, letting OSError and ValueError reach main()'s handlers."""
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def _coerce_search_value(value: str, raw: bool):
+def _coerce_search_value(value: str, raw: bool) -> Any:
     """Turn a command-line search value into the type match_metadata expects.
 
     A shell can only hand over strings, but match_metadata compares some fields
@@ -321,10 +383,21 @@ def _coerce_search_value(value: str, raw: bool):
     try:
         return json.loads(value)
     except ValueError:
+        # Falling back to text is right for values like `pp>Zprime>ee`, but a
+        # value that opens like a JSON list usually means the shell stripped the
+        # quotes: bash turns an unquoted ["a","b"] into [a,b], which would then
+        # be searched for as literal text and quietly match nothing.
+        if _LOOKS_STRUCTURED_RE.match(value):
+            print(
+                f"Warning: '{value}' is not valid JSON, so it is being searched for as text. "
+                "If you meant a list, quote it so the shell keeps it intact: "
+                '\'["2electron","BSM"]\'. Pass --raw to silence this.',
+                file=sys.stderr,
+            )
         return value
 
 
-def _validate_samples_defs(samples_defs, path: str) -> None:
+def _validate_samples_defs(samples_defs: Any, path: str) -> None:
     """Check a `dataset build` definitions file before handing it to the library.
 
     build_dataset() iterates `info["dids"]` directly, so a missing key raises a
@@ -366,6 +439,14 @@ def _describe_cache(release: str) -> str:
     return f"{state}, {_format_age(age)}"
 
 
+# --- Command handlers ---
+#
+# Every _cmd_* function takes the parsed argparse.Namespace and returns None:
+# they print and are the last thing a command does, so there is nothing to hand
+# back. The early `return`s below are just bail-outs after emitting JSON.
+# Handlers named `_args` ignore their argument entirely.
+
+
 # --- release ---
 
 
@@ -378,7 +459,8 @@ def _release_catalogue() -> dict[str, str]:
     return catalogue
 
 
-def _cmd_release_list(args):
+def _cmd_release_list(args: argparse.Namespace) -> None:
+    """List every selectable release, marking the active one with `*`."""
     catalogue = _release_catalogue()
     if args.json:
         _emit(catalogue)
@@ -390,7 +472,8 @@ def _cmd_release_list(args):
         print(f"{marker} {name.ljust(width)}  {description}")
 
 
-def _cmd_release_show(args):
+def _cmd_release_show(args: argparse.Namespace) -> None:
+    """Report the release in effect, where it came from, and its cache state."""
     release, source = _resolve_release(args.release)
     local_path = _resolve_local_path(release, args.local_path)
     if args.json:
@@ -409,7 +492,8 @@ def _cmd_release_show(args):
     print(f"Data:    {local_path or 'remote'}")
 
 
-def _cmd_release_set(args):
+def _cmd_release_set(args: argparse.Namespace) -> None:
+    """Save a release for future commands and, unless told not to, cache it now."""
     _validate_release(args.name)
     config = _read_config()
     config["release"] = args.name
@@ -458,7 +542,8 @@ def _cmd_release_set(args):
         print(f"Cached {cached} datasets.")
 
 
-def _cmd_release_unset(args):
+def _cmd_release_unset(args: argparse.Namespace) -> None:
+    """Forget the saved release, then report what the fallback now is."""
     config = _read_config()
     config.pop("release", None)
     _write_config(config)
@@ -472,27 +557,32 @@ def _cmd_release_unset(args):
 # --- dataset ---
 
 
-def _cmd_dataset_list(_args):
+def _cmd_dataset_list(_args: argparse.Namespace) -> None:
+    """List the dataset IDs available in the active release."""
     _emit(_metadata.available_datasets())
 
 
-def _cmd_dataset_show(args):
+def _cmd_dataset_show(args: argparse.Namespace) -> None:
+    """Show one dataset's metadata, or a single field of it."""
     if args.full:
         _emit(_metadata.get_all_info(args.key, args.field))
     else:
         _emit(_metadata.get_metadata(args.key, args.field))
 
 
-def _cmd_dataset_urls(args):
+def _cmd_dataset_urls(args: argparse.Namespace) -> None:
+    """Print the file URLs for one dataset."""
     _emit(_metadata.get_urls(args.key, skim=args.skim, protocol=args.protocol, cache=args.cache))
 
 
-def _cmd_dataset_search(args):
+def _cmd_dataset_search(args: argparse.Namespace) -> None:
+    """Find datasets whose metadata field matches a value."""
     value = _coerce_search_value(args.value, args.raw)
     _emit(_metadata.match_metadata(args.field, value, float_tolerance=args.tolerance))
 
 
-def _cmd_dataset_build(args):
+def _cmd_dataset_build(args: argparse.Namespace) -> None:
+    """Turn a JSON definitions file into a sample-name -> URLs mapping."""
     samples_defs = _read_json_file(args.definitions)
     _validate_samples_defs(samples_defs, args.definitions)
     _emit(
@@ -508,28 +598,34 @@ def _cmd_dataset_build(args):
 # --- metadata ---
 
 
-def _cmd_metadata_fields(_args):
+def _cmd_metadata_fields(_args: argparse.Namespace) -> None:
+    """List the metadata fields available in the active release."""
     _emit(_metadata.get_metadata_fields())
 
 
-def _cmd_metadata_keywords(_args):
+def _cmd_metadata_keywords(_args: argparse.Namespace) -> None:
+    """List the keywords used in the active release."""
     _emit(_metadata.available_keywords())
 
 
-def _cmd_metadata_skims(_args):
+def _cmd_metadata_skims(_args: argparse.Namespace) -> None:
+    """List the skims available in the active release."""
     _emit(_metadata.available_skims())
 
 
-def _cmd_metadata_dump(_args):
+def _cmd_metadata_dump(_args: argparse.Namespace) -> None:
+    """Print the whole metadata dictionary for the active release."""
     _emit(_metadata.get_all_metadata())
 
 
-def _cmd_metadata_export(args):
+def _cmd_metadata_export(args: argparse.Namespace) -> None:
+    """Write the active release's metadata to a file."""
     _metadata.save_metadata(args.file)
     _emit({"exported": args.file, "release": _metadata.get_current_release()})
 
 
-def _cmd_metadata_import(args):
+def _cmd_metadata_import(args: argparse.Namespace) -> None:
+    """Load metadata from a file and register it under a release name."""
     _metadata.read_metadata(args.file, release=args.as_release)
     # Persist into the cache so subsequent commands can select this release.
     _save_metadata_cache(_metadata_cache_path(args.as_release))
@@ -539,15 +635,18 @@ def _cmd_metadata_import(args):
 # --- weights ---
 
 
-def _cmd_weights_show(args):
+def _cmd_weights_show(args: argparse.Namespace) -> None:
+    """Show the Monte Carlo weight metadata for one dataset."""
     _emit(_weights.get_weights(args.key, e_tag=args.e_tag))
 
 
-def _cmd_weights_names(args):
+def _cmd_weights_names(args: argparse.Namespace) -> None:
+    """List the weight names for one dataset."""
     _emit(_weights.get_weight_names(args.key, e_tag=args.e_tag))
 
 
-def _cmd_weights_list(_args):
+def _cmd_weights_list(_args: argparse.Namespace) -> None:
+    """List the weight names for every dataset in the active release."""
     # Always the active release: the library only supports the current one, so
     # the global --release (which is validated) is the single way to choose it.
     _emit(_weights.get_all_weights_for_release())
@@ -556,13 +655,14 @@ def _cmd_weights_list(_args):
 # --- cache ---
 
 
-def _cmd_cache_info(args):
+def _cmd_cache_info(args: argparse.Namespace) -> None:
+    """Report which releases are cached on disk, and how old each entry is."""
     entries = []
     for release in sorted(_known_releases()):
         path = _metadata_cache_path(release)
         age = _cache_age(path)
         if age is None:
-            continue
+            continue  # Known release, but nothing cached for it yet.
         entries.append(
             {
                 "release": release,
@@ -585,7 +685,8 @@ def _cmd_cache_info(args):
         print(f"  {entry['release'].ljust(width)}  {state}, {_format_age(entry['age_seconds'])}")
 
 
-def _cmd_cache_clear(args):
+def _cmd_cache_clear(args: argparse.Namespace) -> None:
+    """Delete every cached release, which only ever costs a refetch."""
     removed = []
     # Only ever remove files we know we wrote, never a blind glob of the directory.
     for release in sorted(_known_releases()):
@@ -593,7 +694,7 @@ def _cmd_cache_clear(args):
         try:
             os.remove(path)
         except OSError:
-            continue
+            continue  # Not cached, or already gone: nothing to report.
         removed.append(path)
     if args.json:
         _emit({"removed": removed})
@@ -601,7 +702,12 @@ def _cmd_cache_clear(args):
     print(f"Cleared {len(removed)} cached release{'s' if len(removed) != 1 else ''}.")
 
 
-def _cmd_cache_localize(args):
+def _cmd_cache_localize(args: argparse.Namespace) -> None:
+    """Rewrite cached URLs to point at local files, for the ones that exist.
+
+    Unlike --local-path, which rewrites every URL by basename, this keeps files
+    it can't find on disk as remote URLs, so a partial local copy still works.
+    """
     _metadata.find_all_files(args.path, warnmissing=args.warn_missing)
     release = _metadata.get_current_release()
     _save_metadata_cache(_metadata_cache_path(release))
@@ -614,15 +720,22 @@ def _cmd_cache_localize(args):
 # --- env ---
 
 
-def _cmd_env_install(args):
+def _cmd_env_install(args: argparse.Namespace) -> None:
+    """Install packages at the versions pinned in an environment.yml."""
     _utils.install_from_environment(*args.packages, environment_file=args.environment_file)
     _emit({"installed": list(args.packages) or "all", "environment_file": args.environment_file})
 
 
 # --- Argument parsing ---
+#
+# One builder per command group, each taking the shared subparsers object and
+# attaching its commands to it. Two flags set via set_defaults() control what
+# main() does before dispatching: `loads_metadata` (False for commands that
+# touch only local state) and `needs_full` (True for commands that need the
+# whole release rather than a single dataset lookup).
 
 
-def _add_release_commands(sub):
+def _add_release_commands(sub: _SubParsers) -> None:
     """`release` manages which release other commands act on. Local config only."""
     parser = sub.add_parser("release", help="Inspect or set the release used by default")
     parser.set_defaults(loads_metadata=False)
@@ -653,7 +766,7 @@ def _add_release_commands(sub):
     group.add_parser("unset", help="Forget the saved release").set_defaults(func=_cmd_release_unset)
 
 
-def _add_dataset_commands(sub):
+def _add_dataset_commands(sub: _SubParsers) -> None:
     """`dataset` covers discovery and per-dataset lookups."""
     parser = sub.add_parser("dataset", help="Find datasets and get their metadata or file URLs")
     group = parser.add_subparsers(dest="dataset_command", required=True)
@@ -672,6 +785,8 @@ def _add_dataset_commands(sub):
     p.add_argument("key", help="Dataset number or physics_short name")
     p.add_argument("--skim", default="noskim", help="Skim type (default: noskim)")
     p.add_argument("--protocol", choices=["root", "https", "eos"], default="root")
+    # default=None, not False: the library distinguishes "caller said no cache"
+    # from "caller expressed no preference".
     cache_group = p.add_mutually_exclusive_group()
     cache_group.add_argument("--cache", dest="cache", action="store_true", default=None)
     cache_group.add_argument("--no-cache", dest="cache", action="store_false")
@@ -684,7 +799,7 @@ def _add_dataset_commands(sub):
         help=(
             "Value to match, read as JSON where possible: 20000 matches a number, "
             '\'["top","Alternative"]\' requires both, null finds empty fields, '
-            "anything else is treated as text"
+            "anything else is treated as text. Quote lists so the shell keeps them intact"
         ),
     )
     p.add_argument("--raw", action="store_true", help="Treat the value as plain text, never as JSON")
@@ -695,13 +810,14 @@ def _add_dataset_commands(sub):
     p.add_argument("definitions", help="JSON file mapping sample names to {'dids': [...], 'color': ...}")
     p.add_argument("--skim", default="noskim", help="Skim type (default: noskim)")
     p.add_argument("--protocol", choices=["root", "https", "eos"], default="https")
+    # Here the library's own default is False, so mirror it rather than None.
     cache_group = p.add_mutually_exclusive_group()
     cache_group.add_argument("--cache", dest="cache", action="store_true", default=False)
     cache_group.add_argument("--no-cache", dest="cache", action="store_false")
     p.set_defaults(func=_cmd_dataset_build)
 
 
-def _add_metadata_commands(sub):
+def _add_metadata_commands(sub: _SubParsers) -> None:
     """`metadata` covers release-wide vocabularies and bulk import/export."""
     parser = sub.add_parser("metadata", help="Release-wide metadata vocabularies and bulk transfer")
     group = parser.add_subparsers(dest="metadata_command", required=True)
@@ -723,13 +839,14 @@ def _add_metadata_commands(sub):
     p.add_argument("file", help="Destination file; extension selects the format")
     p.set_defaults(func=_cmd_metadata_export, needs_full=True)
 
+    # Imports read from a file rather than the API, so no release is loaded first.
     p = group.add_parser("import", help="Load metadata from a file into the local cache")
     p.add_argument("file", help="JSON file previously written by `metadata export`")
     p.add_argument("--as-release", dest="as_release", default="custom", help="Name to store it under")
     p.set_defaults(func=_cmd_metadata_import, loads_metadata=False)
 
 
-def _add_weights_commands(sub):
+def _add_weights_commands(sub: _SubParsers) -> None:
     """`weights` covers Monte Carlo weight metadata."""
     parser = sub.add_parser("weights", help="Query Monte Carlo weight metadata")
     group = parser.add_subparsers(dest="weights_command", required=True)
@@ -750,7 +867,7 @@ def _add_weights_commands(sub):
     )
 
 
-def _add_cache_commands(sub):
+def _add_cache_commands(sub: _SubParsers) -> None:
     """`cache` manages the on-disk metadata cache."""
     parser = sub.add_parser("cache", help="Inspect, clear, or localize the metadata cache")
     parser.set_defaults(loads_metadata=False)
@@ -762,11 +879,12 @@ def _add_cache_commands(sub):
     p = group.add_parser("localize", help="Rewrite cached URLs to point at a local copy of the files")
     p.add_argument("path", help="Root directory holding your local copy of the data")
     p.add_argument("--warn-missing", action="store_true", help="Warn about files not found locally")
-    # Needs the release loaded so the rewritten metadata can be saved back.
+    # Overrides the group default: needs the release loaded so the rewritten
+    # metadata can be saved back to the cache.
     p.set_defaults(func=_cmd_cache_localize, loads_metadata=True, needs_full=True)
 
 
-def _add_env_commands(sub):
+def _add_env_commands(sub: _SubParsers) -> None:
     """`env` covers environment setup helpers."""
     parser = sub.add_parser("env", help="Environment setup helpers")
     parser.set_defaults(loads_metadata=False)
@@ -778,7 +896,8 @@ def _add_env_commands(sub):
     p.set_defaults(func=_cmd_env_install)
 
 
-def _build_parser():
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the full parser: global options, then one subparser per command group."""
     parser = argparse.ArgumentParser(
         prog="atlasopenmagic",
         description="Query ATLAS Open Data metadata, file URLs, and MC weights.",
@@ -841,8 +960,15 @@ def _build_parser():
     return parser
 
 
-def main(argv=None) -> int:
-    """Entry point for the `atlasopenmagic` / `atom` console scripts."""
+def main(argv: Optional[list[str]] = None) -> int:
+    """Entry point for the `atlasopenmagic` / `atom` console scripts.
+
+    Args:
+        argv: Command-line arguments; defaults to sys.argv[1:] when omitted.
+
+    Returns:
+        A process exit code: 0 on success, 1 if the command failed.
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -853,6 +979,8 @@ def main(argv=None) -> int:
     _metadata.set_verbosity(args.verbosity or "warning")
 
     try:
+        # Commands that only touch local state skip this entirely, so `release
+        # show` and `cache info` stay fast and work offline.
         if args.loads_metadata:
             release, _ = _resolve_release(args.release)
             _apply_release(
@@ -863,6 +991,8 @@ def main(argv=None) -> int:
                 page_size=args.page_size,
             )
         args.func(args)
+    # Errors are reported as a single line rather than a traceback: a stack
+    # trace tells a CLI user nothing they can act on.
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
@@ -874,6 +1004,7 @@ def main(argv=None) -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     finally:
+        # In a finally block so the notice still appears when a command fails.
         _print_update_notice(update_check)
 
     return 0

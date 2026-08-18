@@ -471,6 +471,20 @@ def test_coerce_search_value_raw_keeps_text():
     assert cli._coerce_search_value("20000", raw=True) == "20000"
 
 
+@pytest.mark.parametrize("given", ["[2electron,BSM]", "{a:1}", "  [oops]"])
+def test_coerce_search_value_warns_on_shell_mangled_json(given, capsys):
+    """A value that opens like JSON but doesn't parse is usually unquoted shell input."""
+    assert cli._coerce_search_value(given, raw=False) == given
+    assert "not valid JSON" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("given,raw", [("pp>Zprime>ee", False), ("[2electron,BSM]", True)])
+def test_coerce_search_value_stays_quiet(given, raw, capsys):
+    """No warning for genuine text, nor when --raw says text was intended."""
+    assert cli._coerce_search_value(given, raw=raw) == given
+    assert capsys.readouterr().err == ""
+
+
 def test_search_sends_integers_not_strings(monkeypatch, no_metadata_load):
     captured = {}
     monkeypatch.setattr(
