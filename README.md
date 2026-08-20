@@ -60,6 +60,79 @@ And get the URLs for the one that's to be used:
 all_mc = atom.get_urls('data')
 ```
 
+## Command-line interface
+Installing the package also installs a CLI, available as both `atlasopenmagic` and the shorter `atom`. The two are the same program, so if `atom` clashes with something else on your machine, `atlasopenmagic` always works and can be aliased to whatever you prefer. It follows a `atom <group> <command> [arguments] [options]` layout and prints JSON to stdout, so it composes well with tools like `jq` or with shell scripts.
+
+Pick a release once, then query without having to repeat yourself:
+```bash
+atom release set 2024r-pp
+atom dataset show 301204 --field cross_section_pb
+atom dataset urls 301204 --protocol https
+atom dataset search process "pp>Zprime>ee"
+atom weights names 301204
+```
+
+The command groups are:
+
+| Group | Commands |
+|---|---|
+| `release` | `list`, `show`, `set <name>`, `unset` |
+| `dataset` | `list`, `show <key>`, `urls <key>`, `search <field> <value>`, `build <defs.json>` |
+| `metadata` | `fields`, `keywords`, `skims`, `dump`, `export <file>`, `import <file>` |
+| `weights` | `show <key>`, `names <key>`, `list` |
+| `cache` | `info`, `clear`, `localize <path>` |
+| `env` | `install [packages...]` |
+
+### Searching
+`dataset search` reads its value as JSON where it can, so searches keep the types the Python API expects:
+```bash
+atom dataset search nEvents 20000                     # number, not the string "20000"
+atom dataset search keywords '["2electron","BSM"]'    # requires both keywords
+atom dataset search Filters null                      # datasets where the field is empty
+atom dataset search process "pp>Zprime>ee"            # not valid JSON, so plain text
+atom dataset search keywords 2024 --raw               # force text for a numeric-looking value
+```
+
+Quote lists and objects, or the shell will take them apart before `atom` ever sees them: `zsh` reads the brackets as a filename pattern and refuses to run the command, while `bash` strips the inner quotes and hands over `[2electron,BSM]`, which is no longer valid JSON. The CLI warns when it receives a value that opens like a list but doesn't parse, rather than silently searching for it as text.
+
+### Reading data from disk
+If you already have the files locally, point the CLI at them and the URLs come back as paths:
+```bash
+atom release set 2024r-pp --local-path /data/atlas    # remembered for this release
+atom --local-path eos dataset urls 301204             # native POSIX /eos/... paths
+```
+`--local-path` on its own applies to a single command; on `release set` it is saved alongside the release. Use `atom cache localize <path>` instead when you want only the files that actually exist locally rewritten, leaving the rest as remote URLs.
+
+Run `atom --help` or `atom <group> <command> --help` for the full set of options. The deprecated library functions (`get_urls_data`, `build_mc_dataset`, `build_data_dataset`) are intentionally not exposed; use `dataset urls` and `dataset build` instead.
+
+### Output
+Commands that return data (`dataset urls`, `dataset show`, `metadata dump`, `weights ...`) print JSON, so they can be piped straight into `jq`. Commands that report state (`release show`, `release list`, `cache info`) print a short human-readable summary instead. Pass `--json` to force JSON everywhere:
+```bash
+atom release show            # Release: 2024r-pp / Source: config / Cache: fresh, just now
+atom --json release show     # {"cache": "fresh, just now", "release": "2024r-pp", ...}
+```
+
+### Release selection
+Each invocation is a separate process, so the release is resolved from, in order of precedence: the `--release` flag, the `ATLAS_RELEASE` environment variable, the release saved by `atom release set` (in `~/.config/atlasopenmagic/config.json`), and finally the library default. `atom release show` reports which one is in effect and where it came from.
+
+### Caching
+Because nothing persists in memory between invocations, the CLI caches each release's metadata under `~/.cache/atlasopenmagic/` so repeated commands don't refetch the whole release. `atom release set` downloads and caches the release up front, so the wait happens where you asked for it rather than on whichever query you happen to run first; pass `--no-fetch` to just save the setting. After that, queries are served from disk:
+```bash
+atom release set 2024r-pp    # fetches once, ~1.3s
+atom dataset list            # served from cache, ~0.1s, no network
+```
+Entries expire after 7 days. Use `--refresh` to bypass the cache for one command, `atom cache info` to see what is cached, and `atom cache clear` to delete it. The cache is disposable: deleting it only costs one refetch.
+
+`atom metadata import` loads a previously exported file into that cache under a name of your choice, which can then be selected like any other release:
+```bash
+atom metadata export snapshot.json
+atom metadata import snapshot.json --as-release mysnapshot
+atom --release mysnapshot dataset list
+```
+
+### Update notification
+The CLI checks PyPI at most once a day for a newer release and prints a short notice to stderr if one is available. The check belongs to the CLI alone: using the package from Python (`import atlasopenmagic`) never triggers it, so imports in notebooks and scripts stay offline and just as fast as before. Disable it with `--no-update-check` or by setting `ATLASOPENMAGIC_NO_UPDATE_CHECK=1`.
+
 
 ## Contributing
 Contributions are welcome! To contribute:

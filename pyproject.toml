@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atlasopenmagic"
-version = "1.9.1"
+version = "1.10.0"
 description = "A utility package for retrieving ATLAS open data URLs and metadata."
 authors = [
     { name="ATLAS Collaboration", email="atlas-outreach-opendata-support@cern.ch" }
@@ -21,6 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 
     "Operating System :: OS Independent",
 
@@ -45,6 +47,10 @@ dependencies = [
     "pyyaml",
     "tqdm"
 ]
+
+[project.scripts]
+atlasopenmagic = "atlasopenmagic.cli:main"
+atom = "atlasopenmagic.cli:main"
 
 [project.urls]
 Homepage = "https://opendata.atlas.cern/"
