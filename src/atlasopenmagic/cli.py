@@ -705,8 +705,9 @@ def _cmd_cache_clear(args: argparse.Namespace) -> None:
 def _cmd_cache_localize(args: argparse.Namespace) -> None:
     """Rewrite cached URLs to point at local files, for the ones that exist.
 
-    Unlike --local-path, which rewrites every URL by basename, this keeps files
-    it can't find on disk as remote URLs, so a partial local copy still works.
+    Unlike --local-path, which mirrors the EOS directory structure under the
+    given root regardless of what's actually on disk, this keeps files it
+    can't find as remote URLs, so a partial local copy still works.
     """
     _metadata.find_all_files(args.path, warnmissing=args.warn_missing)
     release = _metadata.get_current_release()

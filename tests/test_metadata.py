@@ -383,7 +383,7 @@ def test_set_local_release():
         atom.set_release("2024r-pp", "tests/mock_data")
 
     assert atom.get_current_release() == "2024r-pp"
-    assert atom.get_urls("301204") == ["tests/mock_data/noskim_301204.root"]
+    assert atom.get_urls("301204") == ["tests/mock_data/path/to/noskim_301204.root"]
 
     # Now test the 'eos' option
     atom.set_release("2024r-pp", "eos")

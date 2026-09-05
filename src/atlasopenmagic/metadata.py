@@ -382,9 +382,9 @@ def _convert_to_local(url: str, local_path: Optional[str] = None) -> str:
         # Special case for EOS: just return the path
         return os.path.join("/eos/", url.split("eos/", 1)[-1])
 
-    rel = url.split(
-        "/",
-    )[-1]
+    # Keep the same relative directory structure as under /eos/, just
+    # rooted at the given local_path instead (e.g. rucio/mc20_13TeV/...).
+    rel = url.split("eos/", 1)[-1] if "eos/" in url else os.path.basename(url)
     return os.path.join(local_path, rel)
 
 
