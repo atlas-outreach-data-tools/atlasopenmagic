@@ -384,7 +384,15 @@ def _convert_to_local(url: str, local_path: Optional[str] = None) -> str:
 
     # Keep the same relative directory structure as under /eos/, just
     # rooted at the given local_path instead (e.g. rucio/mc20_13TeV/...).
-    rel = url.split("eos/", 1)[-1] if "eos/" in url else os.path.basename(url)
+    # Every ATLAS Open Data file lives under /eos/opendata/atlas/, so that
+    # constant prefix doesn't need to be replicated locally either.
+    if "eos/" in url:
+        rel = url.split("eos/", 1)[-1]
+        eos_data_prefix = "opendata/atlas/"
+        if rel.startswith(eos_data_prefix):
+            rel = rel[len(eos_data_prefix) :]
+    else:
+        rel = os.path.basename(url)
     return os.path.join(local_path, rel)
 
 
