@@ -868,6 +868,15 @@ def test_internals():
     assert metadata._convert_to_local(test_path) == "/fake/path/mock_data/noskim_301204.root"
     # Check that if we start with our local path, we just get our path back
     assert metadata._convert_to_local(test_path, "/fake/path") == "/fake/path/mock_data/noskim_301204.root"
+    # The constant /eos/opendata/atlas/ prefix is dropped, keeping only the rest
+    eos_url = "root://eospublic.cern.ch:1094//eos/opendata/atlas/rucio/mc20_13TeV/DAOD_PHYSLITE.1.pool.root.1"
+    assert metadata._convert_to_local(eos_url, "/data/atlas") == (
+        "/data/atlas/rucio/mc20_13TeV/DAOD_PHYSLITE.1.pool.root.1"
+    )
+    # A URL with no EOS path at all falls back to just the basename
+    assert metadata._convert_to_local("https://example.com/file.root", "/data/atlas") == (
+        "/data/atlas/file.root"
+    )
 
 
 def test_other_metadata_field_type():
