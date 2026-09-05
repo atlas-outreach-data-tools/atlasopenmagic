@@ -760,7 +760,9 @@ def _add_release_commands(sub: _SubParsers) -> None:
         dest="set_local_path",
         help=(
             "Remember a local data directory for this release, "
-            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to forget it."
+            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to forget it. "
+            "Must mirror the dataset's EOS path minus the /eos/opendata/atlas/ prefix, "
+            "e.g. <path>/rucio/mc20_13TeV/<file>."
         ),
     )
     p.set_defaults(func=_cmd_release_set)
@@ -914,7 +916,9 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="local_path",
         help=(
             "Read data from this directory instead of streaming it, "
-            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to ignore a saved path."
+            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to ignore a saved path. "
+            "Must mirror the dataset's EOS path minus the /eos/opendata/atlas/ prefix, "
+            "e.g. <path>/rucio/mc20_13TeV/<file>."
         ),
     )
     parser.add_argument(

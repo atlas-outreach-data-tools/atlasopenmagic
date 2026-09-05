@@ -103,6 +103,11 @@ atom --local-path eos dataset urls 301204             # native POSIX /eos/... pa
 ```
 `--local-path` on its own applies to a single command; on `release set` it is saved alongside the release. Use `atom cache localize <path>` instead when you want only the files that actually exist locally rewritten, leaving the rest as remote URLs.
 
+Your local copy must mirror the dataset's path on EOS, minus the constant `/eos/opendata/atlas/` prefix. For example, `--local-path /data/atlas` expects:
+```
+/data/atlas/rucio/mc20_13TeV/DAOD_PHYSLITE.37620644._000012.pool.root.1
+```
+
 Run `atom --help` or `atom <group> <command> --help` for the full set of options. The deprecated library functions (`get_urls_data`, `build_mc_dataset`, `build_data_dataset`) are intentionally not exposed; use `dataset urls` and `dataset build` instead.
 
 ### Output

@@ -406,7 +406,9 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         release: The name of the release to set as active.
         local_path: A local directory path to use for caching dataset files.
             If provided, the client will assume that datasets are available locally
-            at this path. Provide "eos" as the local_path to access using the native POSIX.
+            at this path, mirroring the dataset's EOS path minus the constant
+            /eos/opendata/atlas/ prefix (e.g. <local_path>/rucio/mc20_13TeV/<file>).
+            Provide "eos" as the local_path to access using the native POSIX.
         page_size: The number of records to retrieve at a time.
 
     Raises:
