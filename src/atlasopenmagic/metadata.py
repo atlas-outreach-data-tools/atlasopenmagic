@@ -382,9 +382,17 @@ def _convert_to_local(url: str, local_path: Optional[str] = None) -> str:
         # Special case for EOS: just return the path
         return os.path.join("/eos/", url.split("eos/", 1)[-1])
 
-    rel = url.split(
-        "/",
-    )[-1]
+    # Keep the same relative directory structure as under /eos/, just
+    # rooted at the given local_path instead (e.g. rucio/mc20_13TeV/...).
+    # Every ATLAS Open Data file lives under /eos/opendata/atlas/, so that
+    # constant prefix doesn't need to be replicated locally either.
+    if "eos/" in url:
+        rel = url.split("eos/", 1)[-1]
+        eos_data_prefix = "opendata/atlas/"
+        if rel.startswith(eos_data_prefix):
+            rel = rel[len(eos_data_prefix) :]
+    else:
+        rel = os.path.basename(url)
     return os.path.join(local_path, rel)
 
 
@@ -398,7 +406,9 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         release: The name of the release to set as active.
         local_path: A local directory path to use for caching dataset files.
             If provided, the client will assume that datasets are available locally
-            at this path. Provide "eos" as the local_path to access using the native POSIX.
+            at this path, mirroring the dataset's EOS path minus the constant
+            /eos/opendata/atlas/ prefix (e.g. <local_path>/rucio/mc20_13TeV/<file>).
+            Provide "eos" as the local_path to access using the native POSIX.
         page_size: The number of records to retrieve at a time.
 
     Raises:

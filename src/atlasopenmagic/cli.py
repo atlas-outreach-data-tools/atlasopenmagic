@@ -705,8 +705,9 @@ def _cmd_cache_clear(args: argparse.Namespace) -> None:
 def _cmd_cache_localize(args: argparse.Namespace) -> None:
     """Rewrite cached URLs to point at local files, for the ones that exist.
 
-    Unlike --local-path, which rewrites every URL by basename, this keeps files
-    it can't find on disk as remote URLs, so a partial local copy still works.
+    Unlike --local-path, which mirrors the EOS directory structure under the
+    given root regardless of what's actually on disk, this keeps files it
+    can't find as remote URLs, so a partial local copy still works.
     """
     _metadata.find_all_files(args.path, warnmissing=args.warn_missing)
     release = _metadata.get_current_release()
@@ -759,7 +760,9 @@ def _add_release_commands(sub: _SubParsers) -> None:
         dest="set_local_path",
         help=(
             "Remember a local data directory for this release, "
-            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to forget it."
+            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to forget it. "
+            "Must mirror the dataset's EOS path minus the /eos/opendata/atlas/ prefix, "
+            "e.g. <path>/rucio/mc20_13TeV/<file>."
         ),
     )
     p.set_defaults(func=_cmd_release_set)
@@ -913,7 +916,9 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="local_path",
         help=(
             "Read data from this directory instead of streaming it, "
-            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to ignore a saved path."
+            f"or '{_LOCAL_PATH_EOS}' for native POSIX EOS paths. Pass '' to ignore a saved path. "
+            "Must mirror the dataset's EOS path minus the /eos/opendata/atlas/ prefix, "
+            "e.g. <path>/rucio/mc20_13TeV/<file>."
         ),
     )
     parser.add_argument(
