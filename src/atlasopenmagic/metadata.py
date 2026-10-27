@@ -114,6 +114,9 @@ RELEASES_DESC = {
         "2025 Open Data for research release for event generation at 13.6 TeV "
         "(https://opendata.cern.ch/record/160000)."
     ),
+    "2026r-hihp": (
+        "2026 Open Data for research release of heavy ion hard probes collisions "
+    )
 }
 
 
