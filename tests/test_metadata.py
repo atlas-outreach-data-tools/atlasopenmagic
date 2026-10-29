@@ -184,6 +184,15 @@ def mock_api():
         else:
             active_datasets = ALL_MOCK_DATASETS
 
+        # Handle release listing endpoint: /releases/lean
+        if url.endswith("/releases/lean"):
+            mock_response = MagicMock()
+            mock_response.raise_for_status.return_value = None
+            mock_response.json.return_value = [
+                {"name": name, "description": desc} for name, desc in atom.metadata.RELEASES_DESC.items()
+            ]
+            return mock_response
+
         # Handle weight endpoints
         if "/weights/" in url:
             parts = url.split("/weights/")[-1].split("/")
@@ -339,16 +348,21 @@ def mock_api():
     # This prevents _get_session from creating a real session
     session_class_patcher = patch("requests.Session", return_value=mock_session)
     url_patcher = patch("atlasopenmagic.metadata.API_BASE_URL", mock_base_url)
+    # _get_releases() uses a plain requests.get (no retries), so mock that too.
+    plain_get_patcher = patch("atlasopenmagic.metadata.requests.get", side_effect=get_side_effect)
 
-    # Start both patches
+    # Start the patches
     session_class_patcher.start()
     url_patcher.start()
+    plain_get_patcher.start()
 
     try:
         # Also reset the global _session to None to force recreation
         import atlasopenmagic.metadata as md
 
         md._session = None
+        md._releases = None
+        md._releases_retry_at = 0.0
 
         # Reset the release, which triggers fetching paginated and caching
         atom.set_release("2024r-pp")
@@ -363,6 +377,9 @@ def mock_api():
         # Stop patches after test completes
         session_class_patcher.stop()
         url_patcher.stop()
+        plain_get_patcher.stop()
+        atom.metadata._releases = None
+        atom.metadata._releases_retry_at = 0.0
 
 
 # === Tests for get_metadata() ===
@@ -1714,3 +1731,76 @@ def test_get_all_weights_missing_empty_datasets_block():
                 atom.get_all_weights_for_release("2025r-evgen-13tev")
     finally:
         md.current_release = original_release
+
+
+def _lean_get(payload=None, error=None):
+    """A stand-in for requests.get that returns `payload` as JSON, or raises `error`."""
+    get = MagicMock()
+    if error is not None:
+        get.side_effect = error
+    else:
+        get.return_value.json.return_value = payload
+    return get
+
+
+def test_releases_come_from_api():
+    payload = [{"name": "2026r-hihp", "description": "From the API"}]
+    atom.metadata._releases = None
+    get = _lean_get(payload)
+    with patch("atlasopenmagic.metadata.requests.get", get):
+        assert atom.available_releases() == {"2026r-hihp": "From the API"}
+        atom.available_releases()  # cached: the API is asked once
+    assert get.call_count == 1
+    assert get.call_args.args[0].endswith("/releases/lean")
+
+
+def test_available_releases_returns_a_copy():
+    atom.metadata._releases = None
+    atom.available_releases().clear()
+    assert atom.metadata._get_releases()
+
+
+def test_release_without_api_description_keeps_builtin_one():
+    payload = [{"name": "2024r-pp", "description": None}, {"name": "brand-new", "description": None}]
+    atom.metadata._releases = None
+    with patch("atlasopenmagic.metadata.requests.get", _lean_get(payload)):
+        releases = atom.metadata._get_releases()
+    assert releases["2024r-pp"] == atom.metadata.RELEASES_DESC["2024r-pp"]
+    assert releases["brand-new"] == ""
+
+
+@pytest.mark.parametrize(
+    "get",
+    [
+        _lean_get(error=requests.exceptions.ConnectionError("offline")),
+        _lean_get(error=requests.exceptions.HTTPError("404 Not Found")),
+        _lean_get(payload=[]),
+        _lean_get(payload={"detail": "unexpected"}),
+    ],
+)
+def test_releases_fall_back_to_builtin_list(get):
+    atom.metadata._releases = None
+    with patch("atlasopenmagic.metadata.requests.get", get):
+        assert atom.metadata._get_releases() == atom.metadata.RELEASES_DESC
+
+
+def test_releases_fallback_is_retried_after_the_retry_interval():
+    atom.metadata._releases = None
+    failing = _lean_get(error=requests.exceptions.ConnectionError("offline"))
+    with patch("atlasopenmagic.metadata.requests.get", failing):
+        atom.metadata._get_releases()
+        atom.metadata._get_releases()  # still within the interval: no second request
+    assert failing.call_count == 1
+    atom.metadata._releases_retry_at = 1.0  # interval elapsed
+    working = _lean_get([{"name": "2026r-hihp", "description": "d"}])
+    with patch("atlasopenmagic.metadata.requests.get", working):
+        assert atom.metadata._get_releases() == {"2026r-hihp": "d"}
+    assert atom.metadata._releases_retry_at == 0.0
+
+
+def test_set_release_validates_against_api_list():
+    atom.metadata._releases = None
+    payload = [{"name": "2024r-pp", "description": "d"}]
+    with patch("atlasopenmagic.metadata.requests.get", _lean_get(payload)):
+        with pytest.raises(ValueError, match="Use one of: 2024r-pp"):
+            atom.set_release("2020e-13tev")

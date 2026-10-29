@@ -235,7 +235,7 @@ def _metadata_cache_path(release: str) -> str:
 
 def _known_releases() -> list[str]:
     """Releases that may be selected: the published ones plus any imported locally."""
-    known = list(_metadata.RELEASES_DESC)
+    known = list(_metadata._get_releases())
     try:
         cached = os.listdir(_CACHE_DIR)
     except OSError:
@@ -452,7 +452,7 @@ def _describe_cache(release: str) -> str:
 
 def _release_catalogue() -> dict[str, str]:
     """Every selectable release: the published ones, plus anything imported locally."""
-    catalogue = dict(_metadata.RELEASES_DESC)
+    catalogue = dict(_metadata._get_releases())
     for name in _known_releases():
         if name not in catalogue:
             catalogue[name] = "Imported locally with `metadata import`."
