@@ -29,6 +29,7 @@ import logging
 import os
 import pprint  # For pretty printing of dictionaries
 import threading
+import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -85,7 +86,16 @@ current_local_path = None  # pylint: disable=invalid-name
 _session = None  # pylint: disable=invalid-name
 
 
-# A user-friendly dictionary describing the available data releases.
+# Release names and descriptions as served by the API (``/releases/lean``).
+# Populated on first use by _get_releases().
+_releases: Optional[dict[str, str]] = None
+# When the built-in fallback is in use, the monotonic time to ask the API again (0 = never).
+_releases_retry_at = 0.0
+_RELEASES_RETRY_SECONDS = 300
+
+
+# Offline fallback describing the available data releases. The API is the source
+# of truth; this is used only when it cannot be reached or does not list releases.
 RELEASES_DESC = {
     "2016e-8tev": (
         "2016 Open Data for education release of 8 TeV proton-proton collisions "
@@ -203,6 +213,41 @@ def get_session() -> requests.Session:
     )
     _session = s
     return _session
+
+
+def _get_releases() -> dict[str, str]:
+    """Return the available releases as a ``{name: description}`` dict.
+
+    The list comes from the API's ``/releases/lean`` endpoint and is cached for the
+    lifetime of the process. If the API is unreachable, is too old to have that
+    endpoint, or returns no releases, the built-in ``RELEASES_DESC`` is used instead
+    and the API is asked again after ``_RELEASES_RETRY_SECONDS``.
+    A release the API lists without a description keeps the built-in one, if any.
+    """
+    global _releases, _releases_retry_at
+    if _releases is None or (_releases_retry_at and time.monotonic() >= _releases_retry_at):
+        try:
+            # Plain request, no retries: this runs on every CLI start-up, so an
+            # unreachable API must fail fast rather than back off like the data fetches.
+            resp = requests.get(f"{API_BASE_URL}/releases/lean", timeout=(3, 5))
+            resp.raise_for_status()
+            releases = {
+                r["name"]: r.get("description") or RELEASES_DESC.get(r["name"], "") for r in resp.json()
+            }
+            if not releases:
+                raise ValueError("the API returned no releases")
+            _releases_retry_at = 0.0
+        except (requests.exceptions.RequestException, ValueError, KeyError, TypeError) as e:
+            old_api = getattr(getattr(e, "response", None), "status_code", None) == 404
+            _logger.log(
+                logging.DEBUG if old_api else logging.WARNING,
+                "Could not fetch the release list from the API (%s); using built-in list.",
+                e,
+            )
+            releases = dict(RELEASES_DESC)
+            _releases_retry_at = time.monotonic() + _RELEASES_RETRY_SECONDS
+        _releases = releases
+    return _releases
 
 
 def _fetch_page(release_name: str, skip: int, page_size: int) -> list[dict]:
@@ -343,15 +388,16 @@ def available_releases() -> dict[str, tuple[str]]:
         A dictionary mapping release names to their description tuples.
     """
     # Find the length of the longest release name to calculate padding.
-    max_len = max(len(k) for k in RELEASES_DESC.keys())
+    releases = dict(_get_releases())
+    max_len = max(len(k) for k in releases)
 
     print("Available releases:")
     print("========================================")
     # Use ljust() to pad each release name to the max length for perfect
     # alignment.
-    for release, desc in RELEASES_DESC.items():
+    for release, desc in releases.items():
         print(f"{release.ljust(max_len)}  {desc}")
-    return RELEASES_DESC
+    return releases
 
 
 def get_current_release() -> str:
@@ -415,8 +461,9 @@ def set_release(release: str, local_path: Optional[str] = None, page_size: int =
         ValueError: If the provided release name is not valid.
     """
     global current_release, _metadata, current_local_path
-    if release not in RELEASES_DESC:
-        raise ValueError(f"Invalid release '{release}'. Use one of: {', '.join(RELEASES_DESC)}")
+    releases = _get_releases()
+    if release not in releases:
+        raise ValueError(f"Invalid release '{release}'. Use one of: {', '.join(releases)}")
 
     with _metadata_lock:
         # Check if we're actually changing releases

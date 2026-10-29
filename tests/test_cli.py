@@ -27,6 +27,9 @@ def isolate_cli_state(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "_CONFIG_PATH", str(tmp_path / "config" / "config.json"))
     monkeypatch.delenv("ATLAS_RELEASE", raising=False)
     monkeypatch.delenv("ATLASOPENMAGIC_NO_UPDATE_CHECK", raising=False)
+    # Keep the release list offline: pre-seed the cache _get_releases() would fetch.
+    monkeypatch.setattr(_metadata_mod, "_releases", dict(_metadata_mod.RELEASES_DESC))
+    monkeypatch.setattr(_metadata_mod, "_releases_retry_at", 0.0)
 
     # read_metadata()/set_release() mutate module globals directly, so snapshot
     # and restore them rather than leaking into other test modules.

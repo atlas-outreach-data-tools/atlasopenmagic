@@ -35,6 +35,7 @@ First, import the package:
 import atlasopenmagic as atom
 ```
 See the available releases and set to one of the options given by `available_releases()`
+(the list comes from the API; a built-in list is used if the API cannot be reached)
 ```python
 atom.available_releases()
 set_release('2024r-pp')
