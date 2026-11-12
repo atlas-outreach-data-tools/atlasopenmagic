@@ -37,7 +37,7 @@ def install_from_environment(
         ValueError: If the environment file cannot be fetched from URL or has malformed structure.
     """
     if environment_file is None:
-        environment_file = "https://raw.githubusercontent.com/atlas-outreach-data-tools/notebooks-collection-opendata/refs/heads/master/binder/environment.yml"
+        environment_file = "https://raw.githubusercontent.com/atlas-outreach-data-tools/notebooks-collection-opendata/refs/heads/main/binder/environment.yml"
 
     is_url = str(environment_file).startswith("http")
     environment_file = Path(environment_file) if not is_url else environment_file
