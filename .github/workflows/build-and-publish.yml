@@ -20,6 +20,21 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Check that pyproject.toml version matches the release tag
+      env:
+        TAG_NAME: ${{ github.event.release.tag_name }}
+      run: |
+        python3 - <<'EOF'
+        import os, sys, tomllib
+
+        tag = os.environ["TAG_NAME"].removeprefix("v")
+        with open("pyproject.toml", "rb") as f:
+            version = tomllib.load(f)["project"]["version"]
+        if version != tag:
+            sys.exit(f"Version mismatch: release tag is '{os.environ['TAG_NAME']}' but pyproject.toml has '{version}'.")
+        print(f"Version OK: {version}")
+        EOF
+
     - name: Install the latest version of uv
       uses: astral-sh/setup-uv@v5
 
