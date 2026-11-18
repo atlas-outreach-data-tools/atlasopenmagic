@@ -460,9 +460,7 @@ def test_get_metadata_by_short_name():
 def test_get_metadata_mixed_case_dataset_key(key):
     """Non-numeric dataset keys keep API case but are looked up case-insensitively."""
     assert atom.get_metadata(key, "dataset_number") == "data_IFB"
-    assert atom.get_urls(key, skim="2lep") == [
-        "root://eospublic.cern.ch:1094//eos/path/to/2lep_data_IFB.root"
-    ]
+    assert atom.get_urls(key, skim="2lep") == ["root://eospublic.cern.ch:1094//eos/path/to/2lep_data_IFB.root"]
 
 
 def test_get_metadata_specific_field():
