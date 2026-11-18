@@ -84,6 +84,23 @@ MOCK_API_RESPONSE = {
             ],
             "release": {"name": "2024r-pp"},
         },
+        # Non-numeric dataset key with mixed case, as served by the API
+        {
+            "dataset_number": "data_IFB",
+            "physics_short": None,
+            "file_list": [],
+            "skims": [
+                {
+                    "id": 2,
+                    "skim_type": "2lep",
+                    "file_list": ["root://eospublic.cern.ch:1094//eos/path/to/2lep_data_IFB.root"],
+                    "description": "Exactly 2 leptons",
+                    "dataset_number": "data_IFB",
+                    "release_name": "2024r-pp",
+                }
+            ],
+            "release": {"name": "2024r-pp"},
+        },
         # Extra dataset with no available files
         {
             "dataset_number": "410471",
@@ -261,7 +278,8 @@ def mock_api():
             parts = url.split("/metadata/")[-1].split("/")
             if len(parts) >= 2:
                 release_name = parts[0]
-                dataset_id = parts[1].split("?")[0].lower()  # Convert to lowercase for matching
+                raw_id = parts[1].split("?")[0]
+                dataset_id = raw_id.lower()  # physics_short aliases match case-insensitively
 
                 # Select appropriate dataset collection
                 if release_name == "2020e-13tev":
@@ -277,7 +295,7 @@ def mock_api():
                         d
                         for d in search_datasets
                         if (
-                            str(d.get("dataset_number")).lower() == dataset_id
+                            str(d.get("dataset_number")) == raw_id  # the real API is case-sensitive here
                             or (
                                 d.get("physics_short") is not None
                                 and d.get("physics_short").lower() == dataset_id
@@ -438,6 +456,15 @@ def test_get_metadata_by_short_name():
     assert metadata["dataset_number"] == "301204"
 
 
+@pytest.mark.parametrize("key", ["data_IFB", "data_ifb", "DATA_ifb"])
+def test_get_metadata_mixed_case_dataset_key(key):
+    """Non-numeric dataset keys keep API case but are looked up case-insensitively."""
+    assert atom.get_metadata(key, "dataset_number") == "data_IFB"
+    assert atom.get_urls(key, skim="2lep") == [
+        "root://eospublic.cern.ch:1094//eos/path/to/2lep_data_IFB.root"
+    ]
+
+
 def test_get_metadata_specific_field():
     """Test retrieving a single, specific metadata field using the new API name."""
     cross_section = atom.get_metadata("301204", var="cross_section_pb")
@@ -552,7 +579,7 @@ def test_available_skims():
 
     metadata.empty_metadata()
     # Only one skim defined in our test data sample
-    assert atom.available_skims() == ["4lep"]
+    assert atom.available_skims() == ["2lep", "4lep"]
 
 
 def test_get_metadata_fields():
@@ -628,7 +655,7 @@ def test_available_datasets():
 
     # Now see what datasets are available to us
     data = atom.available_datasets()
-    assert data == ["301204", "410470", "410471", "data"]
+    assert data == ["301204", "410470", "410471", "data", "data_IFB"]
 
 
 def test_available_keywords():
@@ -935,11 +962,11 @@ def test_count_endpoint_mock():
     assert response.ok is True
     count_data = response.json()
     assert "count" in count_data
-    assert count_data["count"] == 4  # We have 4 datasets in MOCK_DATASETS
+    assert count_data["count"] == 5  # We have 5 datasets in MOCK_DATASETS
 
     # Test without release filter
     response_all = session.get(f"{md.API_BASE_URL}/datasets/count", timeout=30)
-    assert response_all.json()["count"] == 7  # ALL_MOCK_DATASETS has 7 (4 + 1 from 2020 + 2 from 2025)
+    assert response_all.json()["count"] == 8  # ALL_MOCK_DATASETS has 8 (5 + 1 from 2020 + 2 from 2025)
 
 
 def test_fetch_and_cache_handles_count_error():

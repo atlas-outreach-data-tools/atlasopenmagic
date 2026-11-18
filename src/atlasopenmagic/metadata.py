@@ -79,6 +79,14 @@ _metadata = {}
 _metadata_lock = threading.Lock()
 
 
+def _is_dataset_key(key: str) -> bool:
+    """True for primary dataset keys (DSIDs, "data", "data_<tag>"), False for physics_short aliases.
+
+    Dataset keys keep the case the API returns (e.g. "data_IFB"); aliases are lowercased.
+    """
+    return key.isdigit() or key.lower().startswith("data")
+
+
 # The local path for caching dataset files, if set.
 current_local_path = None  # pylint: disable=invalid-name
 
@@ -372,7 +380,7 @@ def _fetch_and_cache_release_data(release_name: str, max_workers: int = 3, page_
     for k in _metadata:
         AVAILABLE_FIELDS += [m for m in _metadata[k] if m not in AVAILABLE_FIELDS]
 
-    total_fetched = len([k for k in _metadata if k.isdigit() or k == "data"])
+    total_fetched = len([k for k in _metadata if _is_dataset_key(k)])
     _logger.info("✓ Successfully cached %d datasets.", total_fetched)
 
 
@@ -544,7 +552,7 @@ def find_all_files(local_path: str, warnmissing: bool = False) -> None:
     replaced_file_count = 0
 
     # Only process main dataset entries (exclude physics_short aliases)
-    filtered_metadata = {k: v for k, v in _metadata.items() if k.isdigit() or k == "data"}
+    filtered_metadata = {k: v for k, v in _metadata.items() if _is_dataset_key(k)}
 
     for sample, md in filtered_metadata.items():
         # Main file_list
@@ -621,9 +629,13 @@ def get_all_info(key: str, var: Optional[str] = None) -> Any:
         ValueError: If the dataset key or the specified variable field is not found.
     """
     global _metadata
-    key_str = str(key).strip().lower()
+    key_str = str(key).strip()
 
     with _metadata_lock:
+        # Dataset keys keep the API's case (e.g. "data_IFB"), aliases are lowercase:
+        # resolve the user's key case-insensitively to the cached one.
+        if key_str not in _metadata:
+            key_str = next((k for k in _metadata if k.lower() == key_str.lower()), key_str)
         # Check if we have this specific dataset cached
         if key_str not in _metadata:
             # Fetch just this one dataset from the API using the correct endpoint
@@ -804,7 +816,7 @@ def available_datasets() -> list[str]:
             _fetch_and_cache_release_data(current_release)
     # The cache contains keys for both dataset numbers and physics short names.
     # We filter to return only the numeric dataset IDs.
-    return sorted([k for k in _metadata if k.isdigit() or k == "data"])
+    return sorted([k for k in _metadata if _is_dataset_key(k)])
 
 
 def available_skims() -> list[str]:
@@ -925,7 +937,7 @@ def match_metadata(field: str, value: Any, float_tolerance: float = 0.01) -> lis
     matches = []
     for k, metadata in _metadata.items():
         # Keep only the pure numeric (DSID) results for clarity
-        if not k.isdigit():
+        if not _is_dataset_key(k):
             continue
         # Now do the searching
         if field in metadata and metadata[field] is not None:
